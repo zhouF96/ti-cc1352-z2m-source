@@ -10,3 +10,4 @@ src/sysbios/m3_Hwi_asm_switch.obj
 src/sysbios/m3_Hwi_asm.obj
 src/sysbios/m3_TaskSupport_asm.obj
 src/sysbios/m3_IntrinsicsSupport_asm.obj
+src/makefile.libs
