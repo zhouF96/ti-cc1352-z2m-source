@@ -13,6 +13,6 @@
 	<ignoreDefaultDeviceSettings value="true"/>
 	<ignoreDefaultCCSSettings value="true"/>
 	<templateProperties value="id=znp_CC1352P_2_LAUNCHXL_tirtos_ccs.projectspec.znp_CC1352P_2_LAUNCHXL_tirtos_ccs,type=rtsc,xdcToolsVersion=3_60_02_34_core,target=ti.targets.arm.elf.M4F,platform=ti.platforms.simplelink:CC1352P1F3,buildProfile=release,isHybrid=true,configuroOptions= --compileOptions &quot;${COMPILER_FLAGS} &quot;"/>
-	<origin value="E:\TI\simplelink_cc13x2_26x2_sdk_3_40_00_02\examples\rtos\CC1352P_2_LAUNCHXL\zstack\znp\tirtos\ccs\znp_CC1352P_2_LAUNCHXL_tirtos_ccs.projectspec"/>
+	<origin value="E:/workspace_v9/znp_CC1352P_2_LAUNCHXL_tirtos_ccs v3.40"/>
 	<filesToOpen value=""/>
 </projectOptions>

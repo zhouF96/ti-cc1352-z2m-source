@@ -124,8 +124,8 @@ Button2.gpioPin.pinInstance.$name   = "CONFIG_PIN_BTN2";
 /* Internal NVS */
 NVS1.$name                    = "CONFIG_NVSINTERNAL";
 NVS1.nvsType                  = "Internal";
-NVS1.internalFlash.regionBase = 0x52000;
-NVS1.internalFlash.regionSize = 0x4000;
+NVS1.internalFlash.regionBase = 0x50000;
+NVS1.internalFlash.regionSize = 0x6000;
 
 
 /* External NVS */

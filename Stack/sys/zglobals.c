@@ -204,7 +204,8 @@ uint8_t zgEndDeviceConfiguration = END_DEV_CONFIGURATION;
 //
 // NOTICE:  Before enabling Child Aging make sure to review all the related
 // definitions in this file, especially zgNwkParentInformation.
-uint8_t zgChildAgingEnable = TRUE;
+// Disable child aging, otherwise Xiaomi devices are being kicked off the network.
+uint8_t zgChildAgingEnable = FALSE;
 
 //==========    TouchLink NWK configuration    ===============
 // Values used by Router when starts a network as initiator

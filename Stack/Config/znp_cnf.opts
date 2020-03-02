@@ -93,3 +93,5 @@
 
 /* BDB interface */
 -DMT_APP_CNF_FUNC
+
+--preinclude=preinclude.h

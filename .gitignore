@@ -1,0 +1,12 @@
+/default/
+.settings/org.eclipse.core.resources.prefs
+.vscode/c_cpp_properties.json
+src/.exclude
+src/sysbios/rom_sysbios.obj
+src/sysbios/rom_sysbios.aem4f
+src/sysbios/makefile
+
+src/sysbios/m3_Hwi_asm_switch.obj
+src/sysbios/m3_Hwi_asm.obj
+src/sysbios/m3_TaskSupport_asm.obj
+src/sysbios/m3_IntrinsicsSupport_asm.obj

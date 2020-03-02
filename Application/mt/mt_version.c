@@ -69,7 +69,7 @@
  *****************************************************************************/
 const uint8_t MTVersionString[] = {
                                    2,  /* Transport protocol revision */
-                                   0,  /* Product ID */
+                                   1,  /* Product ID */
                                    2,  /* Software major release number */
                                    7,  /* Software minor release number */
                                    1,  /* Software maintenance release number */

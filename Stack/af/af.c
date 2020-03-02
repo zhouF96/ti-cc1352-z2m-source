@@ -403,15 +403,25 @@ void afIncomingData( aps_FrameFormat_t *aff, zAddrType_t *SrcAddress, uint16_t S
 
   if ( ((aff->FrmCtrl & APS_DELIVERYMODE_MASK) == APS_FC_DM_GROUP) )
   {
-#if !defined ( APS_NO_GROUPS )
+#if !defined(APS_NO_GROUPS)
     // Find the first endpoint for this group
-    grpEp = aps_FindGroupForEndpoint( aff->GroupID, APS_GROUPS_FIND_FIRST );
-    if ( grpEp == APS_GROUPS_EP_NOT_FOUND )
-      return;   // No endpoint found
+    grpEp = aps_FindGroupForEndpoint(aff->GroupID, APS_GROUPS_FIND_FIRST);
+    if (grpEp == APS_GROUPS_EP_NOT_FOUND)
+    {
+      // No endpoint found, default to endpoint 1.
+      // In the original source code there is a return here.
+      // This prevent the messags from being forwarded.
+      // For our use-case we want to capture all messages.
+      // Even if the coordinator is not in the group.
+      epDesc = afFindEndPointDesc(1);
+    }
+    else
+    {
+      epDesc = afFindEndPointDesc(grpEp);
+    }
 
-    epDesc = afFindEndPointDesc( grpEp );
-    if ( epDesc == NULL )
-      return;   // Endpoint descriptor not found
+    if (epDesc == NULL)
+      return; // Endpoint descriptor not found
 
     pList = afFindEndPointDescList( epDesc->endPoint );
 #else

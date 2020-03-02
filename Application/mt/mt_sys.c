@@ -510,8 +510,10 @@ static void MT_SysVersion(void)
   uint8_t *pBuf = &verStr[sizeof(MTVersionString)];
 #if (defined MAKE_CRC_SHDW) || (defined FAKE_CRC_SHDW)  //built for bootloader
   uint32_t sblSig;
-  uint32_t sblRev;
+
 #endif
+
+  uint32_t sblRev;
 
   OsalPort_memcpy(verStr, (uint8_t *)MTVersionString, sizeof(MTVersionString));
 
@@ -1327,7 +1329,8 @@ static void MT_SysNvWrite(uint8_t *pBuf)
     else
     {
       /* Attempt to write data (existing) to the specified item */
-      error = pZStackCfg->nvFps.writeItemEx( nvId, dataOfs, dataLen, pBuf );
+      error = pZStackCfg->nvFps.writeItem(nvId, dataLen, pBuf);
+      // error = pZStackCfg->nvFps.writeItemEx( nvId, dataOfs, dataLen, pBuf );
     }
   }
 
