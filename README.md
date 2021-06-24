@@ -2,6 +2,6 @@
 
 build env：
 
-CCS9.3.0
+CCS 10.3.1
 
-SIMPLELINK-CC13X2-26X2-SDK_3.40
+SimpleLink CC13x2 26x2 SDK 5.10.00.48)
