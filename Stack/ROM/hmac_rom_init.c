@@ -9,7 +9,7 @@
 
  ******************************************************************************
  
- Copyright (c) 2017-2019, Texas Instruments Incorporated
+ Copyright (c) 2017-2021, Texas Instruments Incorporated
  All rights reserved.
 
  IMPORTANT: Your use of this Software is limited to those specific rights
@@ -53,7 +53,6 @@
 #include "mac_api.h"
 #include "mac_main.h"
 #include "hal_types.h"
-#include "hal_assert.h"
 #include "mac_coord.h"
 #include "mac_data.h"
 #include "mac_device.h"
@@ -109,6 +108,8 @@
 
 #if defined __TI_COMPILER_VERSION || defined __TI_COMPILER_VERSION__
 #pragma DATA_ALIGN(HMAC_ROM_Flash_JT, 4)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__ ((aligned (4)))
 #else
 #pragma data_alignment=4
 #endif
@@ -241,7 +242,7 @@ extern macMgmt_t macMgmt;
 extern bool macPanCoordinator;
 
 /* Action set 1 */
-extern macAction_t macMgmtAction1[10];
+extern macAction_t macMgmtAction1[12];
 
 /* Action set 2 */
 extern macAction_t macMgmtAction2[5];
@@ -301,7 +302,7 @@ extern macScan_t macScan;
 extern macCfg_t macCfg;
 
 /* Crypto driver handle */
-#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2)
+#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2) && !defined(DeviceFamily_CC13X2X7) && !defined(DeviceFamily_CC26X2X7) && !defined(DeviceFamily_CC13X1) && !defined(DeviceFamily_CC26X1)
 extern CryptoCC26XX_Handle Crypto_handle;
 #else
 extern AESCCM_Handle AESCCM_handle;
@@ -636,6 +637,9 @@ extern uint8 MAC_CbackCheckPending(void);
 /*Api_mac.c */
 extern uint16_t convertTxOptions(ApiMac_txOptions_t txOptions);
 
+/* main.c */
+extern void assertHandler(void);
+
 /* mac_hl_patch.c */
 extern uint8 macPibCheckByPatch(uint8 pibAttribute, void *pValue);
 extern void macSetDefaultsByPatch(uint8 pibAttribute);
@@ -771,7 +775,7 @@ const uint32 HMAC_ROM_Flash_JT[] =
 #endif
    (uint32)&macCfg,                                      //ROM_HMAC_JT_OFFSET[64]
 #if defined (FEATURE_MAC_SECURITY)
-#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2)
+#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2) && !defined(DeviceFamily_CC13X2X7) && !defined(DeviceFamily_CC26X2X7) && !defined(DeviceFamily_CC13X1) && !defined(DeviceFamily_CC26X1)
    (uint32)&Crypto_handle,                               //ROM_HMAC_JT_OFFSET[65]
 #else
    (uint32)&AESCCM_handle,                               //ROM_HMAC_JT_OFFSET[65]
@@ -1114,8 +1118,8 @@ const uint32 HMAC_ROM_Flash_JT[] =
    (uint32)&convertTxOptions,                            //ROM_HMAC_JT_OFFSET[266]
 
 /*Assert */
-   (uint32)&halAssertHandler,                            //ROM_HMAC_JT_OFFSET[267]
-   (uint32)&macMcuLongDiv,                              //ROM_HMAC_JT_OFFSET[268]
+   (uint32)&assertHandler,                               //ROM_HMAC_JT_OFFSET[267]
+   (uint32)&macMcuLongDiv,                               //ROM_HMAC_JT_OFFSET[268]
 
    (uint32)&MAC_CbackCheckPending,                       //ROM_HMAC_JT_OFFSET[269]
 

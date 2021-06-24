@@ -9,7 +9,7 @@
 
  ******************************************************************************
  
- Copyright (c) 2005-2019, Texas Instruments Incorporated
+ Copyright (c) 2005-2021, Texas Instruments Incorporated
  All rights reserved.
 
  IMPORTANT: Your use of this Software is limited to those specific rights
@@ -240,32 +240,32 @@ extern "C" {
 #define MAC_GENERIC_PHY_DESCRIPTOR_ENTRIES   10
 
 /* PHY IDs */
-/* 915MHz US Frequency band operating mode #1 */
-#define MAC_STD_US_915_PHY_1              1
-/* 915MHz US Frequency band operating mode #2 */
-#define MAC_STD_US_915_PHY_2              2
-/* 863MHz ETSI Frequency band operating mode #1 */
-#define MAC_STD_ETSI_863_PHY_3            3
-/* 433MHz China Frequency band operating mode #1 */
-#define MAC_GENERIC_CHINA_433_PHY_128     128
-/* 915MHz US LRM Frequency band operating mode #1 */
-#define MAC_GENERIC_US_LRM_915_PHY_129    129
-/* 433MHz China LRM Frequency band operating mode #1 */
-#define MAC_GENERIC_CHINA_LRM_433_PHY_130 130
-/* 863MHz ETSI LRM Frequency band operating mode #1 */
-#define MAC_GENERIC_ETSI_LRM_863_PHY_131  131
-/* 915MHz US Frequency band operating mode #1 */
-#define MAC_GENERIC_US_915_PHY_132        132
-/* 863MHz ETSI Frequency band operating mode #1 */
-#define MAC_GENERIC_ETSI_863_PHY_133      133
+/* 915MHz Frequency band operating mode #1 */
+#define MAC_50KBPS_915MHZ_PHY_1         1
+/* 915MHz Frequency band operating mode #2 */
+#define MAC_150KBPS_915MHZ_PHY_2        2
+/* 868MHz Frequency band operating mode #1 */
+#define MAC_50KBPS_868MHZ_PHY_3         3
+/* 433MHz Frequency band operating mode #1 */
+#define MAC_50KBPS_433MHZ_PHY_128       128
+/* 915MHz LRM Frequency band operating mode #1 */
+#define MAC_5KBPS_915MHZ_PHY_129        129
+/* 433MHz LRM Frequency band operating mode #1 */
+#define MAC_5KBPS_433MHZ_PHY_130        130
+/* 868MHz LRM Frequency band operating mode #1 */
+#define MAC_5KBPS_868MHZ_PHY_131        131
+/* 915MHz Frequency band operating mode #3 */
+#define MAC_200KBPS_915MHZ_PHY_132      132
+/* 868MHz Frequency band operating mode #3 */
+#define MAC_200KBPS_868MHZ_PHY_133      133
 
 /* MRFSK Standard Phy ID start */
-#define MAC_MRFSK_STD_PHY_ID_BEGIN           MAC_STD_US_915_PHY_1
+#define MAC_MRFSK_STD_PHY_ID_BEGIN           MAC_50KBPS_915MHZ_PHY_1
 /* MRFSK Standard Phy ID end */
 #define MAC_MRFSK_STD_PHY_ID_END             (MAC_MRFSK_STD_PHY_ID_BEGIN + MAC_STANDARD_PHY_DESCRIPTOR_ENTRIES - 1)
 
 /* MRFSK Generic Phy ID start */
-#define MAC_MRFSK_GENERIC_PHY_ID_BEGIN       MAC_GENERIC_CHINA_433_PHY_128
+#define MAC_MRFSK_GENERIC_PHY_ID_BEGIN       MAC_50KBPS_433MHZ_PHY_128
 /* MRFSK Generic Phy ID end */
 #define MAC_MRFSK_GENERIC_PHY_ID_END         (MAC_MRFSK_GENERIC_PHY_ID_BEGIN + MAC_GENERIC_PHY_DESCRIPTOR_ENTRIES - 1)
 
@@ -328,11 +328,14 @@ extern "C" {
 #define MAC_GTS_PERMIT                    0x4D  /* TRUE if the PAN coordinator accepts GTS requests */
 #define MAC_MAX_CSMA_BACKOFFS             0x4E  /* The maximum number of backoffs the CSMA-CA algorithm will attempt
                                                    before declaring a channel failure */
-#define MAC_MIN_BE                        0x4F  /* The minimum value of the backoff exponent in the CSMA-CA algorithm.
+/*#define MAC_MIN_BE                        0x4F   The minimum value of the backoff exponent in the CSMA-CA algorithm.
                                                    If this value is set to 0, collision avoidance is disabled during
                                                    the first iteration of the algorithm. Also for the slotted version
                                                    of the CSMA-CA algorithm with the battery life extension enabled,
                                                    the minimum value of the backoff exponent will be at least 2 */
+
+#define MAC_MIN_BE                        0
+
 #define MAC_PAN_ID                        0x50  /* The PAN identifier.  If this value is 0xffff, the device is not
                                                    associated */
 #define MAC_PROMISCUOUS_MODE              0x51  /* TRUE if the MAC is in promiscuous mode */
@@ -346,7 +349,9 @@ extern "C" {
 #define MAC_TRANSACTION_PERSISTENCE_TIME  0x55  /* The maximum time in beacon intervals that a transaction is stored by
                                                    a coordinator and indicated in the beacon */
 #define MAC_ASSOCIATED_PAN_COORD          0x56  /* TRUE if the device is associated to the PAN coordinator */
-#define MAC_MAX_BE                        0x57  /* The maximum value of the backoff exponent in the CSMA-CA algorithm */
+//#define MAC_MAX_BE                        0x57  /* The maximum value of the backoff exponent in the CSMA-CA algorithm */
+#define MAC_MAX_BE                        3  /* The maximum value of the backoff exponent in the CSMA-CA algorithm */
+
 #define MAC_MAX_FRAME_TOTAL_WAIT_TIME     0x58  /* The maximum number of CAP symbols in a beacon-enabled PAN, or
                                                    symbols in a non beacon-enabled PAN, to wait for a frame intended
                                                    as a response to a data request frame */
@@ -918,7 +923,7 @@ typedef struct
   uint8           channel;           /* Transmit the data frame on this channel */
   uint8           power;             /* Transmit the data frame at this power level */
   uint8*          pIEList;           /* pointer to the payload IE list, excluding termination IEs */
-  uint16          payloadIELen;      /* length of the payload IE’s */
+  uint16          payloadIELen;      /* length of the payload IEï¿½s */
   uint8           fhProtoDispatch;   /* Not Used, RESERVED for future. Shall be set to zero */
   uint32          includeFhIEs;      /* Bitmap indicates which FH IE's need to be included */
 } macDataReq_t;

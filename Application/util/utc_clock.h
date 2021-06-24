@@ -1,9 +1,10 @@
 /******************************************************************************
- @file
 
- @brief
+ @file  utc_clock.h
 
- Group: WCS, LPC, BTS
+ @brief UTC Clock types and functions prototypes.
+
+ Group: WCS, BTS
  Target Device: cc13x2_26x2
 
  ******************************************************************************
@@ -43,8 +44,8 @@
  
  *****************************************************************************/
 
-#ifndef STACK_TASK_H
-#define STACK_TASK_H
+#ifndef UTC_CLOCK_H
+#define UTC_CLOCK_H
 
 #ifdef __cplusplus
 extern "C"
@@ -54,11 +55,11 @@ extern "C"
 /*********************************************************************
  * INCLUDES
  */
-#include "zstackconfig.h"
 
 /*********************************************************************
  * MACROS
  */
+#define	IsLeapYear(yr)	(!((yr) % 400) || (((yr) % 100) && !((yr) % 4)))
 
 /*********************************************************************
  * CONSTANTS
@@ -68,6 +69,21 @@ extern "C"
  * TYPEDEFS
  */
 
+// number of seconds since 0 hrs, 0 minutes, 0 seconds, on the
+// 1st of January 2000 UTC
+typedef uint32_t UTCTime;
+
+// UTC time structs broken down until standard components.
+typedef struct
+{
+  uint8_t seconds;  // 0-59
+  uint8_t minutes;  // 0-59
+  uint8_t hour;     // 0-23
+  uint8_t day;      // 0-30
+  uint8_t month;    // 0-11
+  uint16_t year;    // 2000+
+} UTCTimeStruct;
+
 /*********************************************************************
  * GLOBAL VARIABLES
  */
@@ -76,48 +92,49 @@ extern "C"
  * FUNCTIONS
  */
 
-/*********************************************************************
- * @fn      osalInitTasks
+/*
+ * @fn      UTC_init
  *
- * @brief   This function creates the TIRTOS task for the Stack, registers the
- *          stack layers service task with OsalPort messaging and calls each of
- *          the service task init functions.
+ * @brief   Initialize the UTC clock module.  Sets up and starts the
+ *          clock instance.
  *
- * @param   pUserCfg The stack onfiguration structure
+ * @param   None.
  *
- * @return  void
+ * @return  None.
  */
-extern void stackTask_init( zstack_Config_t*  pUserCfg );
+extern void UTC_init(void);
 
-/*********************************************************************
- * @fn      stackTask_init
- *
- * @brief   This function creates the TIRTOS task for the Stack, registers the
- *          stack layers service functions with OsalPort messaging and calls each of
- *          the service task init functions.
- *
- * @param   none
- *
- * @return  task service ID for the main stack service task
+/*
+ * Set the new time.  This will only set the seconds portion
+ * of time and doesn't change the factional second counter.
+ *     newTime - number of seconds since 0 hrs, 0 minutes,
+ *               0 seconds, on the 1st of January 2000 UTC
  */
-extern uint8_t stackTask_getStackServiceId(void);
+extern void UTC_setClock( UTCTime newTime );
 
-/**************************************************************************************************
- * @fn          stackTaskGetTaskHndl
- *
- * @brief       This function returns the TIRTOS Task handle of the Stack Task.
- *
- * input parameters
- *
- * @param       pUserCfg - MAC user config
- *
- * output parameters
- *
- *
- * @return      Stack Task ID.
- **************************************************************************************************
+/*
+ * Gets the current time.  This will only return the seconds
+ * portion of time and doesn't include the factional second counter.
+ *     returns: number of seconds since 0 hrs, 0 minutes,
+ *              0 seconds, on the 1st of January 2000 UTC
  */
-extern Task_Handle* stackTaskGetTaskHndl(void);
+extern UTCTime UTC_getClock( void );
+
+/*
+ * Converts UTCTime to UTCTimeStruct
+ *
+ * secTime - number of seconds since 0 hrs, 0 minutes,
+ *          0 seconds, on the 1st of January 2000 UTC
+ * tm - pointer to breakdown struct
+ */
+extern void UTC_convertUTCTime( UTCTimeStruct *tm, UTCTime secTime );
+
+/*
+ * Converts UTCTimeStruct to UTCTime (seconds since 00:00:00 01/01/2000)
+ *
+ * tm - pointer to UTC time struct
+ */
+extern UTCTime UTC_convertUTCSecs( UTCTimeStruct *tm );
 
 /*********************************************************************
 *********************************************************************/
@@ -126,4 +143,4 @@ extern Task_Handle* stackTaskGetTaskHndl(void);
 }
 #endif
 
-#endif /* STACK_TASK_H */
+#endif /* UTC_CLOCK_H */

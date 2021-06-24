@@ -41,6 +41,7 @@
  * INCLUDES
  */
 
+#include "ti_zstack_config.h"
 #include "bdb.h"
 #include "zd_app.h"
 #include "rom_jt_154.h"
@@ -86,6 +87,7 @@
 #endif
 
 #include "zstacktask.h"
+#include "ti_zstack_config.h"
 
 
  /*********************************************************************
@@ -338,8 +340,8 @@ void bdb_ZclIdentifyCmdInd( uint16_t identifyTime, uint8_t endpoint )
 {
   zclAttrRec_t identifyAttrRec;
 
-  if ( zclFindAttrRec( endpoint, ZCL_CLUSTER_ID_GEN_IDENTIFY,
-                      ATTRID_IDENTIFY_TIME, &identifyAttrRec ) )
+  if ( zclFindAttrRec( endpoint, ZCL_CLUSTER_ID_GENERAL_IDENTIFY,
+                      ATTRID_IDENTIFY_IDENTIFY_TIME, &identifyAttrRec ) )
   {
     //If we are processing an actual change
     if(*(uint16_t*)identifyAttrRec.attr.dataPtr != identifyTime)
@@ -620,6 +622,11 @@ ZStatus_t bdb_TCAddJoiningDevice(uint16_t parentAddr, uint8_t* JoiningExtAddr)
     tempJoiningDescNode = tempJoiningDescNode->nextDev;
   }
 
+  tempJoiningDescNode->nextDev = NULL;
+  tempJoiningDescNode->NodeJoinTimeout = bdbAttributes.bdbTrustCenterNodeJoinTimeout;
+  tempJoiningDescNode->parentAddr = parentAddr;
+  OsalPort_memcpy(tempJoiningDescNode->bdbJoiningNodeEui64, JoiningExtAddr, Z_EXTADDR_LEN);
+
   if(pfnTCLinkKeyExchangeProcessCB)
   {
     bdb_TCLinkKeyExchProcess_t bdb_TCLinkKeyExchProcess;
@@ -629,11 +636,6 @@ ZStatus_t bdb_TCAddJoiningDevice(uint16_t parentAddr, uint8_t* JoiningExtAddr)
 
     bdb_SendMsg(bdb_TaskID, BDB_TC_LINK_KEY_EXCHANGE_PROCESS, BDB_MSG_EVENT_SUCCESS,sizeof(bdb_TCLinkKeyExchProcess_t),(uint8_t*)&bdb_TCLinkKeyExchProcess);
   }
-
-  tempJoiningDescNode->nextDev = NULL;
-  tempJoiningDescNode->NodeJoinTimeout = bdbAttributes.bdbTrustCenterNodeJoinTimeout;
-  tempJoiningDescNode->parentAddr = parentAddr;
-  OsalPort_memcpy(tempJoiningDescNode->bdbJoiningNodeEui64, JoiningExtAddr, Z_EXTADDR_LEN);
 
   return ZSuccess;
 }
@@ -693,7 +695,11 @@ void bdb_TCProcessJoiningList(void)
         //search for the entry in the TCLK table
         keyNvIndex = APSME_SearchTCLinkKeyEntry(tempJoiningDescNode->bdbJoiningNodeEui64,&found, &TCLKDevEntry);
 
-        //Erase all the keys that got expired and did not update the key, exept for those using an install code as long as TC is not mandating the key update.
+        uint16_t nwkAddr;
+        //Look up nwkAddr before it is cleared by ZDSecMgrAddrClear
+        AddrMgrNwkAddrLookup(tempJoiningDescNode->bdbJoiningNodeEui64, &nwkAddr);
+
+        //Erase all the keys that got expired and did not update the key, except for those using an install code as long as TC is not mandating the key update.
         //These devices will keep their install code and may send APS encrypted msgs to TC.
         if(isTCLKExchangeRequired || (TCLKDevEntry.keyAttributes != ZG_PROVISIONAL_KEY) )
         {
@@ -718,16 +724,16 @@ void bdb_TCProcessJoiningList(void)
                               sizeof(APSME_TCLinkKeyNVEntry_t),
                               &TCLKDevEntry );
           }
+        }
 
-          if(pfnTCLinkKeyExchangeProcessCB)
-          {
-            bdb_TCLinkKeyExchProcess_t bdb_TCLinkKeyExchProcess;
-            OsalPort_memcpy(bdb_TCLinkKeyExchProcess.extAddr,tempJoiningDescNode->bdbJoiningNodeEui64, Z_EXTADDR_LEN);
-            AddrMgrNwkAddrLookup(tempJoiningDescNode->bdbJoiningNodeEui64, &bdb_TCLinkKeyExchProcess.nwkAddr);
-            bdb_TCLinkKeyExchProcess.status = BDB_TC_LK_EXCH_PROCESS_EXCH_FAIL;
+        if(pfnTCLinkKeyExchangeProcessCB)
+        {
+          bdb_TCLinkKeyExchProcess_t bdb_TCLinkKeyExchProcess;
+          OsalPort_memcpy(bdb_TCLinkKeyExchProcess.extAddr,tempJoiningDescNode->bdbJoiningNodeEui64, Z_EXTADDR_LEN);
+          bdb_TCLinkKeyExchProcess.nwkAddr = nwkAddr;
+          bdb_TCLinkKeyExchProcess.status = BDB_TC_LK_EXCH_PROCESS_EXCH_FAIL;
 
-            bdb_SendMsg(bdb_TaskID, BDB_TC_LINK_KEY_EXCHANGE_PROCESS, BDB_MSG_EVENT_SUCCESS,sizeof(bdb_TCLinkKeyExchProcess_t),(uint8_t*)&bdb_TCLinkKeyExchProcess);
-          }
+          bdb_SendMsg(bdb_TaskID, BDB_TC_LINK_KEY_EXCHANGE_PROCESS, BDB_MSG_EVENT_SUCCESS,sizeof(bdb_TCLinkKeyExchProcess_t),(uint8_t*)&bdb_TCLinkKeyExchProcess);
         }
         //Free the device from the list
         bdb_TCJoiningDeviceFree(tempJoiningDescNode);
@@ -978,29 +984,28 @@ void bdb_StartCommissioning(uint8_t mode)
           //Which is not distributed
           if(!APSME_IsDistributedSecurity())
           {
-            uint8_t keyAttributes;
-            osal_nv_read_ex(ZCD_NV_EX_TCLK_TABLE, 0,
-                            OsalPort_OFFSET_OF(APSME_TCLinkKeyNVEntry_t,
-                                               keyAttributes),
-                            sizeof(uint8_t),
-                            &keyAttributes);
-
-            //If we must perform the TCLK exchange and we didn't complete it, then reset to FN
-            if(requestNewTrustCenterLinkKey && (keyAttributes != ZG_NON_R21_NWK_JOINED) && (keyAttributes != ZG_VERIFIED_KEY))
-            {
-              //Force to initialize the entry
+              uint8_t found;
+              uint16_t entryIndex;
               APSME_TCLinkKeyNVEntry_t APSME_TCLKDevEntry;
 
-              memset(&APSME_TCLKDevEntry,0,sizeof(APSME_TCLinkKeyNVEntry_t));
-              APSME_TCLKDevEntry.keyAttributes = ZG_DEFAULT_KEY;
-              osal_nv_write_ex(ZCD_NV_EX_TCLK_TABLE, 0,
-                               sizeof(APSME_TCLinkKeyNVEntry_t),
-                               &APSME_TCLKDevEntry);
+              entryIndex = APSME_SearchTCLinkKeyEntry(AIB_apsTrustCenterAddress, &found, &APSME_TCLKDevEntry);
 
-              TCLinkKeyRAMEntry[0].txFrmCntr = 0;
-              TCLinkKeyRAMEntry[0].rxFrmCntr = 0;
-              TCLinkKeyRAMEntry[0].entryUsed = FALSE;
+            //If we must perform the TCLK exchange and we didn't complete it, then reset to FN
+            if(requestNewTrustCenterLinkKey && (APSME_TCLKDevEntry.keyAttributes != ZG_NON_R21_NWK_JOINED) && (APSME_TCLKDevEntry.keyAttributes != ZG_VERIFIED_KEY))
+            {
+              if(entryIndex < gZDSECMGR_TC_DEVICE_MAX)
+              {
+                //Force to initialize the entry
+                memset(&APSME_TCLKDevEntry,0,sizeof(APSME_TCLinkKeyNVEntry_t));
+                APSME_TCLKDevEntry.keyAttributes = ZG_DEFAULT_KEY;
+                osal_nv_write_ex(ZCD_NV_EX_TCLK_TABLE, entryIndex,
+                                sizeof(APSME_TCLinkKeyNVEntry_t),
+                                &APSME_TCLKDevEntry);
 
+                TCLinkKeyRAMEntry[entryIndex].txFrmCntr = 0;
+                TCLinkKeyRAMEntry[entryIndex].rxFrmCntr = 0;
+                TCLinkKeyRAMEntry[entryIndex].entryUsed = FALSE;
+              }
 
               //reset the device parameters to FN
               bdbAttributes.bdbNodeIsOnANetwork = FALSE;
@@ -1358,6 +1363,8 @@ void bdb_reportCommissioningState(uint8_t bdbCommissioningState,bool didSuccess)
             bdbAttributes.bdbCommissioningStatus = BDB_COMMISSIONING_TCLK_EX_FAILURE;
 
             OsalPortTimers_stopTimer( bdb_TaskID, BDB_PROCESS_TIMEOUT);
+
+            bdb_setNodeIsOnANetwork(FALSE);
 
             //No process shall be attempted after this fail
             bdbAttributes.bdbCommissioningMode = 0;
@@ -1800,8 +1807,18 @@ ZStatus_t bdb_rejoinNwk(void)
 
   if(rejoinStatus == ZSuccess)
   {
-    uint8_t tmp = true;
-    ZMacSetReq( ZMacRxOnIdle, &tmp ); // Set receiver always on during rejoin
+#if ( RFD_RX_ALWAYS_ON_CAPABLE == TRUE )
+    if ( ZG_DEVICE_RTR_TYPE || zgRxAlwaysOn == TRUE )
+    {
+      uint8_t tmp = true;
+      ZMacSetReq( ZMacRxOnIdle, &tmp ); // Set receiver always on during rejoin
+    }
+    else
+#endif
+    // disable polling during rejoin scan
+    {
+      nwk_SetCurrentPollRateType(POLL_RATE_DISABLED, TRUE);
+    }
 
     // Perform Secure or Unsecure Rejoin depending on available configuration
     if ( ((zgBdbAttemptUnsecureRejoin == FALSE) ||
@@ -1872,7 +1889,7 @@ void bdb_filterNwkDisc(void)
 {
   networkDesc_t* pNwkDesc;
   uint8_t i = 0;
-  uint8_t ResultCount = 0;
+  uint8_t ResultCount = 0, ResultTotal = 0;
 
   pBDBListNwk  = nwk_getNwkDescList();
   nwk_desc_list_release();
@@ -1884,13 +1901,15 @@ void bdb_filterNwkDisc(void)
     pNwkDesc = pNwkDesc->nextDesc;
   }
 
+  ResultTotal = ResultCount;
+
   if(pBDBListNwk)
   {
     pNwkDesc = pBDBListNwk;
 
     if(pNwkDesc)
     {
-      for ( i = 0; i < ResultCount; i++, pNwkDesc = pNwkDesc->nextDesc )
+      for ( i = 0; i < ResultTotal; i++, pNwkDesc = pNwkDesc->nextDesc )
       {
         if ( nwk_ExtPANIDValid( ZDO_UseExtendedPANID ) == true )
         {
@@ -1956,8 +1975,6 @@ void bdb_filterNwkDisc(void)
       }
     }
   }
-
-
 
   //Notify the application about the remaining valid networks to join
   if(pfnFilterNwkDesc)
@@ -2104,12 +2121,7 @@ ZStatus_t bdb_joinProcess(networkDesc_t *pChosenNwk)
     // The receiver is on, turn network layer polling off.
     if ( ZDO_Config_Node_Descriptor.CapabilityFlags & CAPINFO_RCVR_ON_IDLE )
     {
-      // for an End Device with NO Child Table Management process or for a Router
-      if ( ( ZG_DEVICE_RTR_TYPE )  ||
-           ( (ZG_DEVICE_ENDDEVICE_TYPE) && ( zgChildAgingEnable == FALSE ) ) )
-      {
-        nwk_SetCurrentPollRateType(POLL_RATE_RX_ON_TRUE,TRUE);
-      }
+      nwk_SetCurrentPollRateType(POLL_RATE_RX_ON_TRUE,TRUE);
     }
     else
     {
@@ -2437,6 +2449,31 @@ void bdb_startResumeCommissioningProcess(void)
   }
 #endif
 
+  if(bdbAttributes.bdbCommissioningMode & BDB_COMMISSIONING_MODE_NWK_FORMATION)
+  {
+    bdbCommissioningProcedureState.bdbCommissioningState = BDB_COMMISSIONING_STATE_FORMATION;
+
+    if(bdbAttributes.bdbNodeCommissioningCapability & BDB_NETWORK_FORMATION_CAPABILITY)
+    {
+      if(!bdbAttributes.bdbNodeIsOnANetwork)
+      {
+#if (BDB_TOUCHLINK_CAPABILITY_ENABLED == TRUE)
+      bdb_ClearNetworkParams();
+#endif
+        vDoPrimaryScan = TRUE;
+
+        memset(&bdbCommissioningProcedureState,0,sizeof(bdbCommissioningProcedureState));
+        bdbCommissioningProcedureState.bdbCommissioningState = BDB_COMMISSIONING_STATE_FORMATION;
+
+        bdb_nwkJoiningFormation(FALSE);
+        bdb_NotifyCommissioningModeStart(BDB_COMMISSIONING_FORMATION);
+        return;
+      }
+    }
+    bdb_reportCommissioningState(BDB_COMMISSIONING_STATE_FORMATION, FALSE);
+    return;
+  }
+
   if(bdbAttributes.bdbCommissioningMode & BDB_COMMISSIONING_MODE_NWK_STEERING)
   {
     bdbCommissioningProcedureState.bdbCommissioningState = BDB_COMMISSIONING_STATE_STEERING_ON_NWK;
@@ -2476,31 +2513,6 @@ void bdb_startResumeCommissioningProcess(void)
     return;
   }
 
-  if(bdbAttributes.bdbCommissioningMode & BDB_COMMISSIONING_MODE_NWK_FORMATION)
-  {
-    bdbCommissioningProcedureState.bdbCommissioningState = BDB_COMMISSIONING_STATE_FORMATION;
-
-    if(bdbAttributes.bdbNodeCommissioningCapability & BDB_NETWORK_FORMATION_CAPABILITY)
-    {
-      if(!bdbAttributes.bdbNodeIsOnANetwork)
-      {
-#if (BDB_TOUCHLINK_CAPABILITY_ENABLED == TRUE)
-      bdb_ClearNetworkParams();
-#endif
-        vDoPrimaryScan = TRUE;
-
-        memset(&bdbCommissioningProcedureState,0,sizeof(bdbCommissioningProcedureState));
-        bdbCommissioningProcedureState.bdbCommissioningState = BDB_COMMISSIONING_STATE_FORMATION;
-
-        bdb_nwkJoiningFormation(FALSE);
-        bdb_NotifyCommissioningModeStart(BDB_COMMISSIONING_FORMATION);
-        return;
-      }
-    }
-    bdb_reportCommissioningState(BDB_COMMISSIONING_STATE_FORMATION, FALSE);
-    return;
-  }
-
 #if (BDB_FINDING_BINDING_CAPABILITY_ENABLED==1)
   if(bdbAttributes.bdbCommissioningMode & BDB_COMMISSIONING_MODE_FINDING_BINDING)
   {
@@ -2524,8 +2536,8 @@ void bdb_startResumeCommissioningProcess(void)
 
       if( bdb_CurrEpDescriptorList->epDesc->epType & BDB_FINDING_AND_BINDING_TARGET)  //F&B as Target
       {
-        if (zclFindAttrRec( bdb_CurrEpDescriptor->endPoint, ZCL_CLUSTER_ID_GEN_IDENTIFY,
-                  ATTRID_IDENTIFY_TIME, &attrRec ) )
+        if (zclFindAttrRec( bdb_CurrEpDescriptor->endPoint, ZCL_CLUSTER_ID_GENERAL_IDENTIFY,
+                  ATTRID_IDENTIFY_IDENTIFY_TIME, &attrRec ) )
         {
           //Set it to at less 180
           if ( *((uint16_t*)attrRec.attr.dataPtr) <= BDBC_MIN_COMMISSIONING_TIME )
@@ -2744,8 +2756,6 @@ uint32_t bdb_event_loop(byte task_id, uint32_t events)
       // Set every field to 0
       memset( &leaveReq, 0, sizeof( NLME_LeaveReq_t ) );
 
-      bdb_setNodeIsOnANetwork(FALSE);
-
       if ( NLME_LeaveReq( &leaveReq ) != ZSuccess )
       {
         OsalPort_setEvent( bdb_TaskID,BDB_TC_LINK_KEY_EXCHANGE_FAIL);
@@ -2822,12 +2832,13 @@ uint32_t bdb_event_loop(byte task_id, uint32_t events)
         continue;
       }
 
-      if ( zclFindAttrRec( bdb_EpDescriptor->endPoint, ZCL_CLUSTER_ID_GEN_IDENTIFY,
-                        ATTRID_IDENTIFY_TIME, &identifyAttrRec ) )
+      if ( zclFindAttrRec( bdb_EpDescriptor->endPoint, ZCL_CLUSTER_ID_GENERAL_IDENTIFY,
+                        ATTRID_IDENTIFY_IDENTIFY_TIME, &identifyAttrRec ) )
       {
-        if(*((uint16_t*)identifyAttrRec.attr.dataPtr) > 0)
+        uint16_t *data = (uint16_t*)(identifyAttrRec.attr.dataPtr);
+        if ( (*data) > 0)
         {
-          (uint16_t)(*((uint16_t*)identifyAttrRec.attr.dataPtr))--;
+          (*data)--;
           KeepIdentifyTimerRunning = TRUE;
         }
         else
@@ -2930,7 +2941,7 @@ static void bdb_ProcessNodeDescRsp(zdoIncomingMsg_t *pMsg)
       //Is this from the coordinator?
       if(pMsg->srcAddr.addr.shortAddr == 0x0000)
       {
-        ZDO_NodeDescRsp_t NDRsp;
+        ZDO_NodeDescRsp_t NDRsp = {0};
         uint8_t StackComplianceRev;
 
         //Stop timer to avoid unintended resets
@@ -2947,20 +2958,22 @@ static void bdb_ProcessNodeDescRsp(zdoIncomingMsg_t *pMsg)
         else
         {
           APSME_TCLinkKeyNVEntry_t TCLKDevEntry;
+          uint8_t entryFound;
+          uint16_t entryIndex;
+          // Find TCLK entry with TC extAddr
+          entryIndex = APSME_SearchTCLinkKeyEntry(AIB_apsTrustCenterAddress,&entryFound,&TCLKDevEntry);
 
-          // Read current TCLK Device entry and update locally
-          osal_nv_read_ex(ZCD_NV_EX_TCLK_TABLE, 0, 0,
-                          sizeof(APSME_TCLinkKeyNVEntry_t),
-                          &TCLKDevEntry);
+          if(entryIndex < gZDSECMGR_TC_DEVICE_MAX)
+          {
+            TCLKDevEntry.keyAttributes = ZG_NON_R21_NWK_JOINED;
 
-          TCLKDevEntry.keyAttributes = ZG_NON_R21_NWK_JOINED;
+            //Save the KeyAttribute for joining device that it has joined non-R21 nwk
+            osal_nv_write_ex(ZCD_NV_EX_TCLK_TABLE, entryIndex,
+                            sizeof(APSME_TCLinkKeyNVEntry_t),
+                            &TCLKDevEntry);
 
-          //Save the KeyAttribute for joining device that it has joined non-R21 nwk
-          osal_nv_write_ex(ZCD_NV_EX_TCLK_TABLE, 0,
-                          sizeof(APSME_TCLinkKeyNVEntry_t),
-                          &TCLKDevEntry);
-
-          TCLinkKeyRAMEntry[0].entryUsed = TRUE;
+            TCLinkKeyRAMEntry[entryIndex].entryUsed = TRUE;
+          }
 
           bdb_setNodeJoinLinkKeyType(BDB_DEFAULT_GLOBAL_TRUST_CENTER_LINK_KEY);
           bdb_reportCommissioningState(BDB_COMMISSIONING_STATE_TC_LINK_KEY_EXCHANGE, TRUE);

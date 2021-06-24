@@ -526,7 +526,7 @@ static void ZDNwkMgr_CheckForChannelChange( ZDO_MgmtNwkUpdateNotify_t *pNotify )
  */
 static void ZDNwkMgr_ProcessMgmtNwkUpdateReq( zdoIncomingMsg_t *inMsg )
 {
-  ZDO_MgmtNwkUpdateReq_t Req;
+  ZDO_MgmtNwkUpdateReq_t Req = {0};
 
   ZDO_ParseMgmtNwkUpdateReq( inMsg, &Req );
 
@@ -554,7 +554,8 @@ static void ZDNwkMgr_ProcessMgmtNwkUpdateReq( zdoIncomingMsg_t *inMsg )
   {
     // Request is to change Channel. The command provide a new active
     // channel as a single channel in the channelMask.
-    if ( Req.nwkUpdateId > _NIB.nwkUpdateId )
+    // Only process when the nwkUpdateId is more recent (accounting for uint8 wraparound)
+    if ( Req.nwkUpdateId > _NIB.nwkUpdateId || ( Req.nwkUpdateId == 0 && _NIB.nwkUpdateId == 0xFF ) )
     {
       uint8_t i;
 
@@ -588,7 +589,8 @@ static void ZDNwkMgr_ProcessMgmtNwkUpdateReq( zdoIncomingMsg_t *inMsg )
   else if ( Req.scanDuration == 0xFF )
   {
     // Request is to change apsChannelMask and nwkManagerAddr
-    if ( Req.nwkUpdateId > _NIB.nwkUpdateId )
+    // Only process when the nwkUpdateId is more recent (accounting for uint8 wraparound)
+    if ( Req.nwkUpdateId > _NIB.nwkUpdateId || ( Req.nwkUpdateId == 0 && _NIB.nwkUpdateId == 0xFF ) )
     {
       NLME_SetUpdateID(Req.nwkUpdateId); // Set the updateID in the beacon
 
@@ -626,7 +628,7 @@ static void ZDNwkMgr_ProcessMgmtNwkUpdateReq( zdoIncomingMsg_t *inMsg )
  */
 void ZDNwkMgr_ProcessServerDiscRsp( zdoIncomingMsg_t *inMsg )
 {
-  ZDO_ServerDiscRsp_t Rsp;
+  ZDO_ServerDiscRsp_t Rsp = {0};
 
   ZDO_ParseServerDiscRsp( inMsg, &Rsp );
 
@@ -1001,39 +1003,69 @@ void ZDNwkMgr_NetworkUpdateCB( ZDNwkMgr_NetworkUpdate_t *pUpdate )
  */
 void ZDNwkMgr_ProcessNetworkReport( ZDNwkMgr_NetworkReport_t *pNetworkReport )
 {
-  uint8_t i;
-  uint16_t newPID;
-  uint8_t unique = TRUE;
+      /*
 
-  if ( pNetworkReport->reportType == NWKREPORT_PANID_CONFLICT )
-  {
-    if ( ZDNwkMgr_PanIdUpdateInProgress == FALSE )
+      This condition is triggered when a Network Manager receives an incoming Pan ID Conflict from
+      a routing device in the network. Per CCB2713, Customer Application may choose what to do
+      under this condition.
+
+        "
+        On receipt of the network report command frame, the designated network layer function manager
+        MAY change the 16-bit PAN identifier based on a vendor specific configurable mechanism. If the
+        vendor specific configurable mechanism is set to allow automatic resolution of PAN ID conflicts,
+        the designated network layer function manager shall select a new 16-bit PAN identifier for the network.
+
+        If the vendor specific configurable mechanism is set to disallow automatic resolution of PAN ID conflict,
+        the designated network layer function manager SHALL NOT unconditionally select a new 16-bit identifier
+        for the network and SHALL NOT change to the new PAN ID immediately.
+
+        The decision to change PAN IDs in this case should be based on other factors outside the scope
+        of the stack behavior and related to the application performance.
+
+        If the designated network manager decides to resolve an actual PAN identifier conflict, it SHALL proceed
+        as follows. The new PAN identifier is chosen at random, but a check is performed to ensure that the chosen
+        PAN identifier is not already in use in the local neighborhood and also not contained within the Report
+        Information field of the network report command frame.
+        "
+
+      Here is some example code that shows how to send a Network PAN ID Update after receiving a
+      conflict report:
+
+    uint8_t i;
+    uint16_t newPID;
+    uint8_t unique = TRUE;
+
+    if ( pNetworkReport->reportType == NWKREPORT_PANID_CONFLICT )
     {
-      do
+      if ( ZDNwkMgr_PanIdUpdateInProgress == FALSE )
       {
-        // select a new PAN ID
-        newPID = (uint16_t)OsalPort_rand();
-
-        // Make sure that the chosen PAN ID is not already in use in the
-        // local neighborhood and also not contained within the Report
-        // Information field of the Network Report Command frame
-        for ( i = 0; i < pNetworkReport->reportInfoCnt; i++ )
+        do
         {
-          if ( pNetworkReport->panIDs[i] == newPID )
+          // select a new PAN ID
+          newPID = (uint16_t)OsalPort_rand();
+
+          // Make sure that the chosen PAN ID is not already in use in the
+          // local neighborhood and also not contained within the Report
+          // Information field of the Network Report Command frame
+          for ( i = 0; i < pNetworkReport->reportInfoCnt; i++ )
           {
-            unique = FALSE;
-            break;
+            if ( pNetworkReport->panIDs[i] == newPID )
+            {
+              unique = FALSE;
+              break;
+            }
           }
-        }
-      } while ( !unique );
+        } while ( !unique );
 
-      // Send out a Network Update command.
-      NLME_SendNetworkUpdate( NWK_BROADCAST_SHORTADDR, NWKUPDATE_PANID_UPDATE,
-                              _NIB.extendedPANID, _NIB.nwkUpdateId+1, newPID );
+        // Send out a Network Update command.
+        NLME_SendNetworkUpdate( NWK_BROADCAST_SHORTADDR, NWKUPDATE_PANID_UPDATE,
+                                _NIB.extendedPANID, _NIB.nwkUpdateId+1, newPID );
 
-      ZDNwkMgr_PanIdUpdateInProgress = TRUE;
+        ZDNwkMgr_PanIdUpdateInProgress = TRUE;
+      }
     }
-  }
+
+      */
 }
 
 /*********************************************************************

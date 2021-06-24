@@ -62,7 +62,7 @@ extern "C"
 #define ZDNWKMGR_ENABLE                   0x01
 
 // Energy level threshold
-#define ZDNWKMGR_ACCEPTABLE_ENERGY_LEVEL  0x1E
+//#define ZDNWKMGR_ACCEPTABLE_ENERGY_LEVEL  0x1E
 
 // Minimum transmissions attempted for Channel Interference detection
 #if !defined ( ZDNWKMGR_MIN_TRANSMISSIONS )
@@ -70,10 +70,12 @@ extern "C"
 #endif
 
 // Minimum transmit failure rate for Channel Interference detection
-#define ZDNWKMGR_CI_TX_FAILURE            25
+//#define ZDNWKMGR_CI_TX_FAILURE            25
+#define ZDNWKMGR_CI_TX_FAILURE            60
 
 // Minimum transmit failure rate for Channel Change
-#define ZDNWKMGR_CC_TX_FAILURE            50
+//#define ZDNWKMGR_CC_TX_FAILURE            50
+#define ZDNWKMGR_CC_TX_FAILURE            80
 
 // Min and Max Scan Counts for Update Request
 #define ZDNWKMGR_MIN_SCAN_COUNT           0

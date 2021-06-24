@@ -51,6 +51,7 @@
 #include "ti_zstack_config.h"
 #include "nwk_util.h"
 #include "aps_mede.h"
+#include "aps_groups.h"
 #include "ssp.h"
 
 #if !defined (DISABLE_GREENPOWER_BASIC_PROXY) && (ZG_BUILD_RTR_TYPE)
@@ -80,12 +81,6 @@ typedef struct zgItem
  * NWK GLOBAL VARIABLES
  */
 
-// Rejoin backoff (silent period ) duration
-uint32_t zgDefaultRejoinBackoff = REJOIN_BACKOFF;
-
-// Rejoin scan duration
-uint32_t zgDefaultRejoinScan = REJOIN_SCAN ;
-
 // Transmission retries numbers
 uint8_t zgMaxDataRetries = NWK_MAX_DATA_RETRIES;
 uint8_t zgMaxMissingMacAckLinkFailure = MAX_MISSING_MAC_ACK_LINK_FAILURE;
@@ -110,7 +105,7 @@ uint8_t zgSecurePermitJoin = TRUE;
 // TC Link Key. In this scenario, if this flag is TRUE, the Trust Center will
 // encrypt the outgoing NWK Key with the default TC Link Key (ZigbeeAlliance09).
 // If this flag is FALSE (default), the Trust Center will not send the NWK Key at all.
-uint8_t zgAllowRejoinsWithWellKnownKey = FALSE;
+uint8_t zgAllowRejoinsWithWellKnownKey = TRUE;  // https://e2e.ti.com/support/wireless-connectivity/zigbee-and-thread/f/158/p/882650/3265311#3265311
 
 //allowInstallCodes
 uint8_t zgAllowInstallCodes = ZG_IC_SUPPORTED_NOT_REQUIRED;
@@ -142,7 +137,7 @@ uint8_t zgConcentratorRC = CONCENTRATOR_ROUTE_CACHE;   // concentrator with rout
 uint8_t zgNwkSrcRtgExpiryTime = SRC_RTG_EXPIRY_TIME;
 
 // Cleanup Child Table according to routing traffic
-uint8_t zgRouterOffAssocCleanup = FALSE;
+uint8_t zgRouterOffAssocCleanup = TRUE;
 
 // Determines whether or not a remote NWK leave request command frame received
 // by the local device is accepted .
@@ -180,7 +175,7 @@ uint8_t zgNwkParentInformation = NWK_PARENT_INFO_UNDEFINED;
 // This is an index into table Requested Timeout Enumerated Values.
 // It is used by the parent router, it indicates the default timeout value
 // for any end device that does not negotiate a different timeout value
-uint8_t zgNwkEndDeviceTimeoutDefault = NWK_END_DEV_TIMEOUT_DEFAULT;
+uint8_t zgNwkEndDeviceTimeoutDefault = END_DEV_TIMEOUT_VALUE;
 
 // Index into table Requested Timeout Enumerated Values.
 // Used to keep the leave message into MAC queue for child devices that has expired
@@ -204,8 +199,7 @@ uint8_t zgEndDeviceConfiguration = END_DEV_CONFIGURATION;
 //
 // NOTICE:  Before enabling Child Aging make sure to review all the related
 // definitions in this file, especially zgNwkParentInformation.
-// Disable child aging, otherwise Xiaomi devices are being kicked off the network.
-uint8_t zgChildAgingEnable = FALSE;
+uint8_t zgChildAgingEnable = FALSE; // Disable child aging, otherwise Xiaomi devices are being kicked off the network.
 
 //==========    TouchLink NWK configuration    ===============
 // Values used by Router when starts a network as initiator
@@ -213,6 +207,9 @@ uint8_t zTouchLinkNwkStartRtr = FALSE;
 
 //==========    Allow radio to be turned off    ===============
 uint8_t zgAllowRadioRxOff = TRUE;
+
+//==========    For ZED, determines if rx always on is enabled  ===============
+uint8_t zgRxAlwaysOn = RFD_RX_ALWAYS_ON;
 
 /*********************************************************************
  * APS GLOBAL VARIABLES
@@ -1093,6 +1090,41 @@ static void zgUpgradeNVDriver( void )
         }
       }
     }
+#endif
+
+#if !defined ( APS_NO_GROUPS )
+  apsGroupNVItem_t item;
+  nvGroupsHdr_t hdr;
+  ZStatus_t status;
+  uint16_t size;
+  bool deleteLegacy = true;
+
+  if ( osal_nv_read( ZCD_NV_LEGACY_GROUP_TABLE, 0, sizeof(nvGroupsHdr_t), &hdr ) == ZSuccess )
+  {
+    // Read in the device list
+    for ( i = 0; i < hdr.numRecs; i++ )
+    {
+      if ( osal_nv_read( ZCD_NV_LEGACY_GROUP_TABLE,
+                (uint16_t)(sizeof(nvGroupsHdr_t) + (i * sizeof ( apsGroupNVItem_t ))),
+                                  sizeof ( apsGroupNVItem_t ), &item ) == ZSUCCESS )
+      {
+        // Add the group and move to new table
+        status = aps_AddGroup( item.endpoint, &(item.group), true );
+        if( status != SUCCESS && status != ZApsDuplicateEntry)
+        {
+          // If failed to add entry, do not delete old table
+          deleteLegacy = false;
+        }
+      }
+    }
+    if ( true == deleteLegacy )
+    {
+      size = (uint16_t)((sizeof ( nvGroupsHdr_t ))
+                  + ( sizeof( apsGroupNVItem_t ) * gAPS_MAX_GROUPS ));
+      // Delete the old table
+      osal_nv_delete(ZCD_NV_LEGACY_GROUP_TABLE, size );
+    }
+   }
 #endif
 
     upgradeComplete = TRUE;

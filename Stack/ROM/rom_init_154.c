@@ -9,7 +9,7 @@
 
  ******************************************************************************
  
- Copyright (c) 2017-2019, Texas Instruments Incorporated
+ Copyright (c) 2017-2021, Texas Instruments Incorporated
  All rights reserved.
 
  IMPORTANT: Your use of this Software is limited to those specific rights
@@ -64,7 +64,7 @@
  * MACROS
  */
 
-/* RAM address assigne dby Oslo */
+/* RAM address assigned */
 #if defined __TI_COMPILER_VERSION__ && defined __TI_ARM__
 #pragma DATA_SECTION(RAM_MAC_BASE_ADDR ,".data:RAM_MAC_BASE_ADDR")
 uint32_t RAM_MAC_BASE_ADDR[ROM_RAM_TABLE_SIZE];
@@ -72,11 +72,11 @@ uint32_t RAM_MAC_BASE_ADDR[ROM_RAM_TABLE_SIZE];
 #elif defined(__IAR_SYSTEMS_ICC__)
 #pragma location=".data_RAM_BASE_ADDR"
 uint32_t RAM_MAC_BASE_ADDR[ROM_RAM_TABLE_SIZE];
-
+#elif defined(__GNUC__) || defined(__clang__)
+uint32_t RAM_MAC_BASE_ADDR[ROM_RAM_TABLE_SIZE] __attribute__((section(".data:RAM_MAC_BASE_ADDR")));
 #else
 #error "Unsupported platform or compiler"
 #endif
-
 
 /*******************************************************************************
  * CONSTANTS
@@ -154,7 +154,9 @@ void TIMAC_ROM_Init( void )
   ** Controller ROM
   */
   Icall_Osal_ROM_Init();
+#ifdef FEATURE_FREQ_HOP_MODE
   FH_ROM_Init();
+#endif
   HMAC_ROM_Init();
   LMAC_ROM_Init();
 

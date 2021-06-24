@@ -35,6 +35,7 @@
  -->
  */
 
+#include "ti_zstack_config.h"
 #include "rom_jt_154.h"
 #include "osal_nv.h"
 #include "zglobals.h"
@@ -62,11 +63,10 @@
 #include "dgp_stub.h"
 #include "bdb_reporting.h"
 
-#if (defined OTA_SERVER) && (OTA_SERVER == TRUE)
+#if defined OTA_SERVER
 #include "zcl_ota.h"
 #include "mt_ota.h"
 #include "ota_common.h"
-#include "ota_srv_app.h"
 #endif
 
 #if defined (NPI)
@@ -88,6 +88,8 @@
 #if defined ( BDB_TL_INITIATOR ) || defined ( BDB_TL_TARGET )
   #include "bdb_touchlink.h"
 #endif
+
+#include "ti_zstack_config.h"
 
 /* ------------------------------------------------------------------------------------------------
  * Constants
@@ -147,17 +149,14 @@
 #define CAPABLE_ALLOC_ADDR      0x80  /* Request allocation of a short address
                                         in the associate procedure */
 
-// TODO: make this a sysconfig parameter
-#define MINIMUM_APP_POLL_RATE 100
-
 /* ------------------------------------------------------------------------------------------------
  * Typedefs
  * ------------------------------------------------------------------------------------------------
  */
 
-typedef struct
+typedef struct epItem_s
 {
-  void *next;                // Next in the link List
+  struct epItem_s *next;     // Next in the link List
   uint8_t connection;        // connection;
   uint16_t zdoCBs;
   uint32_t zdoRsps;
@@ -219,7 +218,7 @@ uint8_t ZStackTask_getServiceTaskID(void);
 static void StackTask_handleNPIReq( void *pMsg );
 static void processNpiIncomingMsgInd( uint8_t *pkt );
 static void processSysAppMsgInd( mtSysAppMsg_t *pkt );
-#if (defined OTA_SERVER) && (OTA_SERVER == TRUE)
+#if defined OTA_SERVER
 static void processSysOtaMsgInd( OTA_MtMsg_t *pkt );
 #endif // OTA_SERVER
 #endif // NPI
@@ -741,7 +740,7 @@ uint32_t ZStackTaskProcessEvent( uint8_t taskId, uint32_t events )
             processSysAppMsgInd( (mtSysAppMsg_t*)pMsg );
             break;
 
-#if (defined OTA_SERVER) && (OTA_SERVER == TRUE)
+#if defined OTA_SERVER
         case MT_SYS_OTA_MSG:
             processSysOtaMsgInd( (OTA_MtMsg_t*)pMsg );
             break;
@@ -969,7 +968,7 @@ static void processSysAppMsgInd( mtSysAppMsg_t *pkt )
 
 
 
-#if (defined OTA_SERVER) && (OTA_SERVER == TRUE)
+#if defined OTA_SERVER
 /**************************************************************************************************
  * @fn      processSysOtaMsgInd
  *
@@ -5932,7 +5931,7 @@ static bool processSysConfigReadReq( uint8_t srcServiceTaskId, void *pMsg )
 
       pPtr->pRsp->CurrentPollRateTypesEnabled = nwk_GetCurrentPollRateType((uint32_t*)&(pPtr->pRsp->CurrentPollRate));
 
-      if(RFD_RCVC_ALWAYS_ON == FALSE)
+      if( ZG_DEVICE_ENDDEVICE_TYPE && zgRxAlwaysOn == FALSE )
       {
           pPtr->pRsp->PollRateDefault    = nwk_GetConfigPollRate(POLL_RATE_TYPE_DEFAULT);
           pPtr->pRsp->PollRateApp1       = nwk_GetConfigPollRate(POLL_RATE_TYPE_APP_1);
@@ -6057,7 +6056,7 @@ static bool processSysConfigReadReq( uint8_t srcServiceTaskId, void *pMsg )
     if ( pPtr->pReq->extendedPANID )
     {
       pPtr->pRsp->has_extendedPANID = TRUE;
-      OsalPort_memcpy( &pPtr->pRsp->extendedPANID, zgApsUseExtendedPANID, Z_EXTADDR_LEN );
+      OsalPort_memcpy( &pPtr->pRsp->extendedPANID, _NIB.extendedPANID, Z_EXTADDR_LEN );
     }
 
     if ( pPtr->pReq->ieeeAddr )
@@ -6111,18 +6110,6 @@ static bool processSysConfigReadReq( uint8_t srcServiceTaskId, void *pMsg )
     {
       pPtr->pRsp->has_devPartOfNetwork = TRUE;
       pPtr->pRsp->devPartOfNetwork = isDevicePartOfNetwork( );
-    }
-
-    if ( pPtr->pReq->rejoinBackoffDuration )
-    {
-      pPtr->pRsp->has_rejoinBackoffDuration = TRUE;
-      pPtr->pRsp->rejoinBackoffDuration = zgDefaultRejoinBackoff;
-    }
-
-    if ( pPtr->pReq->rejoinScanDuration )
-    {
-      pPtr->pRsp->has_rejoinScanDuration = TRUE;
-      pPtr->pRsp->rejoinScanDuration = zgDefaultRejoinScan;
     }
   }
   else
@@ -6187,7 +6174,7 @@ static bool processSysConfigWriteReq( uint8_t srcServiceTaskId, void *pMsg )
       //Process all poll rate request from App if those are not application pollrates (POLL_RATE_TYPE_DEFAULT | POLL_RATE_TYPE_APP_1 | POLL_RATE_TYPE_APP_2)
       //If those are application poll rates, then make sure are bigger than MINIMUM_APP_POLL_RATE.
       if(! ((uint16_t)pPtr->pReq->pollRateType & (POLL_RATE_TYPE_DEFAULT | POLL_RATE_TYPE_APP_1 | POLL_RATE_TYPE_APP_2))  ||
-            ((uint32_t)pPtr->pReq->pollRate > MINIMUM_APP_POLL_RATE) )
+            ((uint32_t)pPtr->pReq->pollRate >= MINIMUM_APP_POLL_RATE) )
         {
           //Configure the pollrates enabled
           nwk_SetConfigPollRate((uint16_t)pPtr->pReq->pollRateType,(uint32_t)pPtr->pReq->pollRate );
@@ -6353,16 +6340,6 @@ static bool processSysConfigWriteReq( uint8_t srcServiceTaskId, void *pMsg )
     {
       nwkUseMultiCast = pPtr->pReq->nwkUseMultiCast;
       _NIB.nwkUseMultiCast = nwkUseMultiCast;
-    }
-
-    if  ( pPtr->pReq->has_rejoinBackoffDuration )
-    {
-      ZDApp_SetRejoinBackoffDuration( pPtr->pReq->rejoinBackoffDuration );
-    }
-
-    if ( pPtr->pReq->has_rejoinScanDuration )
-    {
-      ZDApp_SetRejoinScanDuration( pPtr->pReq->rejoinScanDuration );
     }
   }
   else

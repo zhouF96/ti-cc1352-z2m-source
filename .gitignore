@@ -11,3 +11,11 @@ src/sysbios/m3_Hwi_asm.obj
 src/sysbios/m3_TaskSupport_asm.obj
 src/sysbios/m3_IntrinsicsSupport_asm.obj
 src/makefile.libs
+.vs/ProjectSettings.json
+.vs/slnx.sqlite
+.vs/znp_CC1352P_2_LAUNCHXL_tirtos_ccs/v17/.suo
+.vs/znp_CC1352P_2_LAUNCHXL_tirtos_ccs/v17/Preview/Browse.VC.db
+.vs/znp_CC1352P_2_LAUNCHXL_tirtos_ccs/v17/Preview/Browse.VC.db-shm
+.vs/znp_CC1352P_2_LAUNCHXL_tirtos_ccs/v17/Preview/Browse.VC.db-wal
+.vs/znp_CC1352P_2_LAUNCHXL_tirtos_ccs/v17/Preview/Browse.VC.opendb
+.vs/znp_CC1352P_2_LAUNCHXL_tirtos_ccs/v17/Preview/ipch/AutoPCH/582ad37f33ded1a1/MT_VERSION.ipch

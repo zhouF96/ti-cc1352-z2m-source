@@ -162,8 +162,6 @@ zAddrType_t zdappMgmtNwkDiscRspAddr;
 uint8_t zdappMgmtNwkDiscStartIndex;
 uint8_t zdappMgmtSavedNwkState;
 
-uint8_t continueJoining = TRUE;
-
 uint8_t  _tmpRejoinState;
 
 // The extended PanID used in ZDO layer for rejoin.
@@ -200,7 +198,6 @@ uint8_t ZDApp_ReadNetworkRestoreState( void );
 uint8_t ZDApp_RestoreNetworkState( void );
 void ZDAppDetermineDeviceType( void );
 void ZDApp_InitUserDesc( void );
-void ZDAppCheckForHoldKey( void );
 void ZDApp_ProcessOSALMsg( OsalPort_EventHdr *msgPtr );
 void ZDApp_ProcessNetworkJoin( void );
 void ZDApp_SetCoordAddress( uint8_t endPoint, uint8_t dstEP );
@@ -422,12 +419,11 @@ uint32_t ZDApp_event_loop( uint8_t task_id, uint32_t events )
           ZDApp_ChangeState( DEV_ROUTER );
         }
 
-        if ( zgChildAgingEnable == TRUE )
-        {
-          // Once the device has changed its state to a ROUTER set the timer to send
-          // Parent annce
-          ZDApp_SetParentAnnceTimer();
-        }
+        // As we cannot enable child aging as Xiaomi devices will drop off
+        // but we stil want to have the parent announces we always enable it here.
+        // Otherwise some end devices could be unreachable when they changed parent
+        // while the coordinator was powered off.
+        ZDApp_SetParentAnnceTimer();
       }
       else
       {
@@ -446,26 +442,6 @@ uint32_t ZDApp_event_loop( uint8_t task_id, uint32_t events )
       // Return unprocessed events
       return (events ^ ZDO_PARENT_ANNCE_EVT);
     }
-  }
-
-  if( events & ZDO_REJOIN_BACKOFF )
-  {
-    if( devState == DEV_NWK_BACKOFF )
-    {
-      ZDApp_ChangeState(DEV_NWK_DISC);
-      // Restart scan for rejoin
-      ZDApp_StartJoiningCycle();
-      OsalPortTimers_startTimer( ZDAppTaskID, ZDO_REJOIN_BACKOFF, zgDefaultRejoinScan );
-    }
-    else
-    {
-      // Rejoin backoff, silent period
-      ZDApp_ChangeState(DEV_NWK_BACKOFF);
-      ZDApp_StopJoiningCycle();
-      OsalPortTimers_startTimer( ZDAppTaskID, ZDO_REJOIN_BACKOFF, zgDefaultRejoinBackoff );
-    }
-
-    return ( events ^ ZDO_REJOIN_BACKOFF);
   }
 
   if ( events & ZDO_STATE_CHANGE_EVT )
@@ -693,6 +669,9 @@ uint8_t ZDOInitDeviceEx( uint16_t startDelay, uint8_t mode)
     }
   }
 
+  //Initialize default poll rates
+  nwk_InitializeDefaultPollRates();
+
 #if defined ( NV_RESTORE )
   // Hold down the SW_BYPASS_NV key (defined in on_board.h)
   // while booting to skip past NV Restore.
@@ -905,12 +884,11 @@ void ZDApp_NetworkStartEvt( void )
         bdb_reportCommissioningState(BDB_INITIALIZATION,TRUE);
       }
 
-      if ( zgChildAgingEnable == TRUE )
-      {
-        // Once the device has changed its state to a COORDINATOR set the timer to send
-        // Parent annce
+    // As we cannot enable child aging as Xiaomi devices will drop off
+    // but we stil want to have the parent announces we always enable it here.
+    // Otherwise some end devices could be unreachable when they changed parent
+    // while the coordinator was powered off.
         ZDApp_SetParentAnnceTimer();
-      }
     }
     else
     {
@@ -1110,32 +1088,6 @@ void ZDApp_InitUserDesc( void )
       }
     }
   }
-}
-
-/*********************************************************************
- * @fn      ZDAppCheckForHoldKey()
- *
- * @brief   Check for key to set the device into Hold Auto Start
- *
- * @param   none
- *
- * @return  none
- */
-void ZDAppCheckForHoldKey( void )
-{
-#if (defined HAL_KEY) && (HAL_KEY == TRUE)
-
-  // Get Keypad directly to see if a HOLD is needed
-  zdappHoldKeys = HalKeyRead();
-
-  // Hold down the SW_BYPASS_START key (see on_board.h)
-  // while booting to avoid starting up the device.
-  if ( zdappHoldKeys == SW_BYPASS_START )
-  {
-    // Change the device state to HOLD on start up
-    devState = DEV_HOLD;
-  }
-#endif // HAL_KEY
 }
 
 /*********************************************************************
@@ -1540,16 +1492,10 @@ void ZDApp_ProcessNetworkJoin( void )
       {
         ZDApp_ChangeState( DEV_END_DEVICE );
 
-        OsalPortTimers_stopTimer( ZDAppTaskID, ZDO_REJOIN_BACKOFF );
-
         // The receiver is on, turn network layer polling off.
         if ( ZDO_Config_Node_Descriptor.CapabilityFlags & CAPINFO_RCVR_ON_IDLE )
         {
-          // if Child Table Management process is not enabled
-          if ( zgChildAgingEnable == FALSE )
-          {
-            nwk_SetCurrentPollRateType(POLL_RATE_RX_ON_TRUE,TRUE);
-          }
+          nwk_SetCurrentPollRateType(POLL_RATE_RX_ON_TRUE,TRUE);
         }
 
         if ( ZSTACK_ROUTER_BUILD )
@@ -2050,7 +1996,7 @@ void ZDApp_PauseNwk()
 {
     APSME_HoldDataRequests( 0xFFFF ); // hold off for as long as possible.
 
-    if ( ZG_BUILD_COORDINATOR_TYPE || ZG_BUILD_RTR_TYPE )
+    if ( 0 != ZG_BUILD_COORDINATOR_TYPE || 0 != ZG_BUILD_RTR_TYPE )
     {
         OsalPortTimers_stopTimer( NWK_TaskID, NWK_LINK_STATUS_EVT );
         OsalPort_clearEvent( NWK_TaskID, NWK_LINK_STATUS_EVT );
@@ -2068,7 +2014,7 @@ void ZDApp_ResumeNwk()
 {
     APSME_HoldDataRequests(0); // Enable APS data request again
 
-    if ( ZG_BUILD_COORDINATOR_TYPE || ZG_BUILD_RTR_TYPE )
+    if ( 0 != ZG_BUILD_COORDINATOR_TYPE || 0 != ZG_BUILD_RTR_TYPE )
     {
         NLME_SetLinkStatusTimer();
 
@@ -2756,7 +2702,7 @@ void ZDO_JoinConfirmCB( uint16_t PanId, ZStatus_t Status )
       }
     }
 
-    if ( (devState == DEV_HOLD) )
+    if ( devState == DEV_HOLD )
     {
       ZDApp_ChangeState( DEV_NWK_JOINING );
     }
@@ -2873,31 +2819,6 @@ ZStatus_t ZDO_JoinIndicationCB(uint16_t ShortAddress, uint8_t *ExtendedAddress,
 #endif
     {
       ZDApp_NVUpdate();  // Notify to save info into NV.
-    }
-
-    // check if we recognize the device performing an unsecure rejoin. If we have
-    // previously authenticated it on the TC, we can consider that it is performing
-    // a trust center rejoin, and we can send it the nwk key using the unique TCLK
-    // that was previously established. If we do not recognize it, it is an unknown
-    // device performing an unsecure rejoin, so we would have to encrypt the nwk key
-    // using the well-known TCLK. zgAllowRejoinsWithWellKnownKey determines if we are allowed to
-    // encrypt the nwk key using the well-known TCLK or not, see zglobals.c definition for
-    // more info
-    if( (zgDeviceLogicalType == ZG_DEVICETYPE_COORDINATOR) &&
-        (type == NWK_ASSOC_REJOIN_UNSECURE) &&
-        (zgAllowRejoinsWithWellKnownKey == FALSE) )
-    {
-      uint8_t found = 0;
-      APSME_TCLinkKeyNVEntry_t TCLKDevEntry = {0};
-      APSME_SearchTCLinkKeyEntry(ExtendedAddress, &found, &TCLKDevEntry);
-
-      // if we did not find the entry, do not send nwk key and return failure
-      // if we found the entry but it is not in the ZG_VERIFIED_KEY state,
-      // do not send nwk key and return failure
-      if( !found || !(TCLKDevEntry.keyAttributes == ZG_VERIFIED_KEY) )
-      {
-        return ZFailure;
-      }
     }
 
     if ( type == NWK_ASSOC_JOIN ||
@@ -3068,7 +2989,7 @@ void ZDO_LeaveInd( NLME_LeaveInd_t* ind )
     // Check if this device needs to leave as a child or descendent
     if ( ind->srcAddr == NLME_GetCoordShortAddr() )
     {
-      if ( ( ind->removeChildren == TRUE )   )
+      if ( ind->removeChildren == TRUE )
       {
         leave = TRUE;
       }
@@ -3209,6 +3130,12 @@ void ZDO_NetworkStatusCB( uint16_t nwkDstAddr, uint8_t statusCode, uint16_t dstA
     // Routing error for dstAddr, this is informational and a Route
     // Request should happen automatically.
   }
+  if ((nwkDstAddr == NLME_GetShortAddr())&& (statusCode == NWKSTAT_SOURCE_ROUTE_FAILURE))
+   {
+      // Received a source route failure, remove route and rediscover.
+      RTG_RemoveRtgEntry(dstAddr, 0);
+      NLME_RouteDiscoveryRequest(dstAddr, 0, 30);
+   }
 }
 
 /******************************************************************************
@@ -3366,49 +3293,6 @@ void ZDApp_NodeProfileSync( uint8_t stackProfile )
       NLME_SetBroadcastFilter( ZDO_Config_Node_Descriptor.CapabilityFlags );
     }
   }
-}
-
-/*********************************************************************
- * @fn      ZDApp_StartJoiningCycle()
- *
- * @brief   Starts the joining cycle of a device.  This will only
- *          continue an already started (or stopped) joining cycle.
- *
- * @param   none
- *
- * @return  TRUE if joining stopped, FALSE if joining or rejoining
- */
-uint8_t ZDApp_StartJoiningCycle( void )
-{
-  if ( devState == DEV_INIT || devState == DEV_NWK_DISC )
-  {
-    continueJoining = TRUE;
-    ZDApp_NetworkInit( 0 );
-
-    return ( TRUE );
-  }
-  else
-    return ( FALSE );
-}
-
-/*********************************************************************
- * @fn      ZDApp_StopJoiningCycle()
- *
- * @brief   Stops the joining or rejoining process of a device.
- *
- * @param   none
- *
- * @return  TRUE if joining stopped, FALSE if joining or rejoining
- */
-uint8_t ZDApp_StopJoiningCycle( void )
-{
-  if ( devState == DEV_INIT || devState == DEV_NWK_DISC || devState == DEV_NWK_BACKOFF )
-  {
-    continueJoining = FALSE;
-    return ( TRUE );
-  }
-  else
-    return ( FALSE );
 }
 
 /*********************************************************************
@@ -3827,34 +3711,6 @@ void ZDApp_ChangeState( devStates_t state )
     devState = state;
     OsalPort_setEvent( ZDAppTaskID, ZDO_STATE_CHANGE_EVT );
   }
-}
-
-/*********************************************************************
- * @fn      ZDApp_SetRejoinScanDuration()
- *
- * @brief   Sets scan duration for rejoin for an end device
- *
- * @param   rejoinScanDuration - milliseconds
- *
- * @return  none
- */
-void ZDApp_SetRejoinScanDuration( uint32_t rejoinScanDuration )
-{
-  zgDefaultRejoinScan = rejoinScanDuration;
-}
-
-/*********************************************************************
- * @fn      ZDApp_SetRejoinBackoffDuration()
- *
- * @brief   Sets rejoin backoff duration for rejoin for an end device
- *
- * @param   rejoinBackoffDuration - milliseconds
- *
- * @return  none
- */
-void ZDApp_SetRejoinBackoffDuration( uint32_t rejoinBackoffDuration )
-{
-  zgDefaultRejoinBackoff = rejoinBackoffDuration;
 }
 
 /*********************************************************************

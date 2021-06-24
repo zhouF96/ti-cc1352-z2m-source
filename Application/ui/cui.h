@@ -6,13 +6,43 @@
  @brief This file contains the interface of the Common User Interface. (CUI)
 
  Group: LPRF SW RND
- $Target Device: DEVICES $
+ Target Device: cc13x2_26x2
 
  ******************************************************************************
- $License: BSD3 2016 $
+ 
+ Copyright (c) 2016-2021, Texas Instruments Incorporated
+ All rights reserved.
+
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+
+ *  Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+
+ *  Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in the
+    documentation and/or other materials provided with the distribution.
+
+ *  Neither the name of Texas Instruments Incorporated nor the names of
+    its contributors may be used to endorse or promote products derived
+    from this software without specific prior written permission.
+
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
  ******************************************************************************
- $Release Name: PACKAGE NAME $
- $Release Date: PACKAGE RELEASE DATE $
+ 
+ 
  *****************************************************************************/
 
 /**
@@ -510,6 +540,7 @@ extern "C"
 #define MAX_CLIENT_NAME_LEN         64
 #endif
 
+
 /*
  * Menu Configurable Defines
  */
@@ -530,6 +561,7 @@ extern "C"
 #define MAX_STATUS_LINE_VALUE_LEN   128
 #endif
 
+#ifndef CUI_MIN_FOOTPRINT
 /*
  * Creates a main menu. A main menu must have a non NULL uart update function.
  * This will be verified when registering the menu. numItems is incremented by
@@ -559,17 +591,40 @@ extern "C"
 /*
  * Inserts _pSubMenu into the .menuItems[] of a parent menu.
  */
-#define CUI_MENU_ITEM_SUBMENU(_pSubMenu) {.pDesc=NULL, .item.pSubMenu=(&_pSubMenu)},
+#define CUI_MENU_ITEM_SUBMENU(_pSubMenu) { \
+        .pDesc=NULL, \
+        .itemType=CUI_MENU_ITEM_TYPE_SUBMENU, \
+        .item.pSubMenu=(&_pSubMenu)},
 
 /*
  * Inserts an action into the .menuItems[] of a parent menu.
  */
-#define CUI_MENU_ITEM_ACTION(_pItemDesc, _pFnAction) {.pDesc=(_pItemDesc), .interceptable=false, .interceptActive=false, .item.pFnAction=(_pFnAction)},
+#define CUI_MENU_ITEM_ACTION(_pItemDesc, _pFnAction) { \
+        .pDesc=(_pItemDesc), \
+        .itemType=CUI_MENU_ITEM_TYPE_ACTION, \
+        .interceptActive=false, \
+        .item.pFnAction=(_pFnAction)},
 
 /*
  * Inserts an interceptable action into the .menuItems[] of a parent menu.
  */
-#define CUI_MENU_ITEM_INT_ACTION(_pItemDesc, _pFnIntercept) {.pDesc=(_pItemDesc), .interceptable=true, .interceptActive=false, .item.pFnIntercept=(_pFnIntercept)},
+#define CUI_MENU_ITEM_INT_ACTION(_pItemDesc, _pFnIntercept) { \
+            .pDesc=(_pItemDesc), \
+            .itemType=CUI_MENU_ITEM_TYPE_INTERCEPT, \
+            .interceptActive=false, \
+            .item.pFnIntercept=(_pFnIntercept)},
+
+/*
+ * Inserts a list action into the .menuItems[] of a parent menu.
+ */
+#define CUI_MENU_ITEM_LIST_ACTION(_pItemDesc, _maxListItems, _pFnListAction) { \
+            .pDesc=(_pItemDesc), \
+            .itemType=CUI_MENU_ITEM_TYPE_LIST, \
+            .interceptActive=false, \
+            .item.pList=&((CUI_list_t){ \
+                .pFnListAction=(_pFnListAction), \
+                .maxListItems=_maxListItems, \
+                .currListIndex=0})},
 
 /*
  * Helper macros to add generic Help and Back screens to all menus
@@ -581,7 +636,29 @@ extern "C"
 #define CUI_SUB_MENU_END CUI_MENU_ITEM_BACK }};
 #define CUI_MENU_ACTION_BACK_DESC  "<      BACK      >"
 #define CUI_MENU_ACTION_HELP_DESC  "<      HELP      >"
+#else
 
+#define CUI_MAIN_MENU(_menuSymbol, _pMenuTitle, _numItems, _pMenuUpdateFn) \
+        CUI_menu_t _menuSymbol;
+
+#define CUI_SUB_MENU(_menuSymbol, _pMenuTitle, _numItems, _pUpperMenu) \
+        CUI_menu_t _menuSymbol;
+
+#define CUI_MENU_ITEM_SUBMENU(_pSubMenu)
+
+#define CUI_MENU_ITEM_ACTION(_pItemDesc, _pFnAction)
+
+#define CUI_MENU_ITEM_INT_ACTION(_pItemDesc, _pFnIntercept)
+
+#define CUI_MENU_ITEM_LIST_ACTION(_pItemDesc, _maxListItems, _pFnListAction)
+
+#define CUI_MENU_ITEM_HELP
+#define CUI_MENU_ITEM_BACK
+#define CUI_MAIN_MENU_END
+#define CUI_SUB_MENU_END
+#define CUI_MENU_ACTION_BACK_DESC  "<      BACK      >"
+#define CUI_MENU_ACTION_HELP_DESC  "<      HELP      >"
+#endif
 
 #define CUI_IS_INPUT_NUM(_input)        ((_input >= '0') && (_input <= '9'))
 #define CUI_IS_INPUT_ALPHA(_input)      ((_input >= 'a') && (_input <= 'z'))
@@ -621,9 +698,7 @@ extern "C"
 #define CUI_COLOR_WHITE             "\033[37m"
 
 #define CUI_DEBUG_MSG_START         "\0337"
-#define CUI_DEBUG_MSG_END           "\0338\033[k"
-
-#define CUI_BLINK_CONTINUOUS        0xFFFF
+#define CUI_DEBUG_MSG_END           "\0338"
 
 /******************************************************************************
  * TYPEDEFS
@@ -637,7 +712,6 @@ typedef enum CUI_retVal
   CUI_SUCCESS,
   CUI_FAILURE,
   CUI_INVALID_CB,
-  CUI_INVALID_PIN_ID,
   CUI_RESOURCE_ALREADY_ACQUIRED,
   CUI_RESOURCE_NOT_ACQUIRED,
   CUI_MODULE_UNINITIALIZED,
@@ -651,9 +725,6 @@ typedef enum CUI_retVal
   CUI_MAX_MENUS_REACHED,
   CUI_PREV_WRITE_UNFINISHED,
   CUI_MISSING_UART_UPDATE_FN,
-  CUI_WRONG_BTN_MODE,
-  CUI_NOT_MANAGING_BTNS,
-  CUI_NOT_MANAGING_LEDS,
   CUI_NOT_MANAGING_UART
 } CUI_retVal_t;
 
@@ -663,8 +734,6 @@ typedef enum CUI_retVal
 typedef uint32_t CUI_clientHandle_t;
 
 typedef struct {
-    bool manageBtns;
-    bool manageLeds;
     bool manageUart;
 } CUI_params_t;
 
@@ -674,29 +743,11 @@ typedef struct {
 } CUI_clientParams_t;
 
 /*
- * [Button Related Types]
- */
-/*! Btn Press Callback function typedef */
-typedef void (*CUI_btnPressCB_t)(uint32_t _index, Button_EventMask _buttonEvents);
-
-typedef struct {
-    uint32_t index;
-    CUI_btnPressCB_t appCB;
-} CUI_btnRequest_t;
-
-/*
- * [LED Related Types]
+ * [Menu Related Types]
  */
 typedef struct {
-    uint32_t index;
-} CUI_ledRequest_t;
-
-/*
- * [Display Related Types]
- */
-typedef struct {
-    int32_t row;
-    int32_t col;
+    int16_t row;
+    int16_t col;
 } CUI_cursorInfo_t;
 
 typedef void (*CUI_pFnClientMenuUpdate_t)(void);
@@ -704,18 +755,28 @@ typedef void (*CUI_pFnClientMenuUpdate_t)(void);
 /* Type definitions for action functions types */
 typedef void (*CUI_pFnAction_t)(const int32_t _itemEntry);
 typedef void (*CUI_pFnIntercept_t)(const char _input, char* _lines[3], CUI_cursorInfo_t * _curInfo);
+typedef void (*CUI_pFnListAction_t)(const uint32_t _listIndex, char* _lines[3], bool _selected);
 
 typedef struct CUI_menu_s CUI_menu_t;
+typedef struct CUI_list_s CUI_list_t;
+
+typedef enum CUI_menuItems{
+    CUI_MENU_ITEM_TYPE_SUBMENU,
+    CUI_MENU_ITEM_TYPE_ACTION,
+    CUI_MENU_ITEM_TYPE_INTERCEPT,
+    CUI_MENU_ITEM_TYPE_LIST
+}CUI_itemType_t;
 
 /* Type definition for a sub menu/action item entry */
 typedef struct {
     char* pDesc;                      /* action description. NULL for sub menu */
-    bool interceptable;               /* Is item interceptable */
+    CUI_itemType_t itemType;          /* What type of menu item is this */
     bool interceptActive;             /* Is item currently being intercepted */
     union {
         CUI_menu_t* pSubMenu;               /* Sub menu */
         CUI_pFnAction_t   pFnAction;        /* Function for action */
         CUI_pFnIntercept_t pFnIntercept;    /* Function for interceptable action */
+        CUI_list_t* pList;                  /* List */
     } item;
 } CUI_menuItem_t;
 
@@ -723,9 +784,16 @@ typedef struct {
 struct CUI_menu_s {
     CUI_pFnClientMenuUpdate_t uartUpdateFn;     /* Uart Update function */
     const char* pTitle;                         /* Title of this menu */
-    int32_t numItems;                           /* # of item entries */
+    uint8_t numItems;                           /* # of item entries */
     CUI_menu_t*  pUpper;                        /* upper menu */
     CUI_menuItem_t menuItems[];                 /* item entries */
+};
+
+/* Type definition for a list object */
+struct CUI_list_s {
+    CUI_pFnListAction_t pFnListAction;
+    uint16_t maxListItems;
+    uint16_t currListIndex;
 };
 
 /******************************************************************************
@@ -775,84 +843,6 @@ void CUI_clientParamsInit(CUI_clientParams_t* _pClientParams);
 CUI_retVal_t CUI_close();
 
 /******************************************************************************
- * Button CUI APIs
- *****************************************************************************/
-/*********************************************************************
- * @fn          CUI_btnResourceRequest
- *
- * @brief       Request access to a button resource
- */
-CUI_retVal_t CUI_btnResourceRequest(const CUI_clientHandle_t _clientHandle, const CUI_btnRequest_t* _pRequest);
-
-/*********************************************************************
- * @fn          CUI_btnSetCb
- *
- * @brief       Set the CUI_btnPressCB of a button resource that is currently
- *                  acquired
- */
-CUI_retVal_t CUI_btnSetCb(const CUI_clientHandle_t _clientHandle, const uint32_t _index, const CUI_btnPressCB_t _appCb);
-
-/*********************************************************************
- * @fn          CUI_btnGetValue
- *
- * @brief       Set the CUI_btnPressCB of a button resource that is currently
- *                  acquired
- */
-CUI_retVal_t CUI_btnGetValue(const CUI_clientHandle_t _clientHandle, const uint32_t _index, bool* _pBtnState);
-
-/*********************************************************************
- * @fn          CUI_btnResourceRelease
- *
- * @brief       Release access to a button resource that is currently acquired
- */
-CUI_retVal_t CUI_btnResourceRelease(const CUI_clientHandle_t _clientHandle, const uint32_t _index);
-
-/******************************************************************************
- * LED CUI APIs
- *****************************************************************************/
-/*********************************************************************
- * @fn          CUI_ledResourceRequest
- *
- * @brief       Request access to a led resource
- */
-CUI_retVal_t CUI_ledResourceRequest(const CUI_clientHandle_t _clientHandle, const CUI_ledRequest_t* _pRequest);
-
-/*********************************************************************
- * @fn          CUI_ledResourceRelease
- *
- * @brief       Release access to a led resource that is currently acquired
- */
-CUI_retVal_t CUI_ledResourceRelease(const CUI_clientHandle_t _clientHandle, const uint32_t _index);
-
-/*********************************************************************
- * @fn          CUI_ledOn
- *
- * @brief       Turn a led on
- */
-CUI_retVal_t CUI_ledOn(const CUI_clientHandle_t _clientHandle, const uint32_t _index, const uint8_t _brightness);
-
-/*********************************************************************
- * @fn          CUI_ledOff
- *
- * @brief       Turn a led off
- */
-CUI_retVal_t CUI_ledOff(const CUI_clientHandle_t _clientHandle, const uint32_t _index);
-
-/*********************************************************************
- * @fn          CUI_ledToggle
- *
- * @brief       Toggle the state of a led [on/off]
- */
-CUI_retVal_t CUI_ledToggle(const CUI_clientHandle_t _clientHandle, const uint32_t _index);
-
-/*********************************************************************
- * @fn          CUI_ledBlink
- *
- * @brief       Start blinking a led. Blinking will be at a rate of LED_BLINK_PERIOD ms
- */
-CUI_retVal_t CUI_ledBlink(const CUI_clientHandle_t _clientHandle, const uint32_t _index, const uint16_t _numBlinks);
-
-/******************************************************************************
  * Menu CUI APIs
  *****************************************************************************/
 /*********************************************************************
@@ -900,7 +890,7 @@ CUI_retVal_t CUI_processMenuUpdate(void);
  *
  * @brief       Request access to a new status line
  */
-CUI_retVal_t CUI_statusLineResourceRequest(const CUI_clientHandle_t _clientHandle, const char _pLabel[MAX_STATUS_LINE_LABEL_LEN], uint32_t* _pLineId);
+CUI_retVal_t CUI_statusLineResourceRequest(const CUI_clientHandle_t _clientHandle, const char _pLabel[MAX_STATUS_LINE_LABEL_LEN], const bool _refreshInd, uint32_t* _pLineId);
 
 /*********************************************************************
  * @fn          CUI_statusLinePrintf
@@ -909,7 +899,7 @@ CUI_retVal_t CUI_statusLineResourceRequest(const CUI_clientHandle_t _clientHandl
  */
 CUI_retVal_t CUI_statusLinePrintf(const CUI_clientHandle_t _clientHandle, const uint32_t _lineId, const char *format, ...);
 
-
+void CUI_wrappedIncrement(size_t* _pValue, int32_t _incAmt, size_t _maxValue);
 /*********************************************************************
  * Assert Debug API
  ********************************************************************/
@@ -924,9 +914,10 @@ CUI_retVal_t CUI_statusLinePrintf(const CUI_clientHandle_t _clientHandle, const 
  *                enter an infinite loop that flashes the leds.
  */
 void CUI_assert(const char* _assertMsg, const bool _spinLock);
-
+#ifndef CUI_MIN_FOOTPRINT
 void CUI_menuActionBack(const int32_t _itemEntry);
 void CUI_menuActionHelp(const char _input, char* _pLines[3], CUI_cursorInfo_t* _pCurInfo);
+#endif
 #ifdef __cplusplus
 }
 #endif

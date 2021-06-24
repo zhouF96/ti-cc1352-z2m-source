@@ -56,16 +56,12 @@
 #include "mac_data.h"
 #include "mac_mgmt.h"
 #include "zcomdef.h"
+#include "ti_zstack_config.h"
 
 #ifndef ZSTACK_GPD
 #include "zglobals.h"
 #endif
 #include "mac_api.h"
-
-#if defined( ZCL_KEY_ESTABLISH )
-  #include "ssp.h"
-#endif
-
 
 /********************************************************************************************************
  *                                                 MACROS
@@ -434,6 +430,20 @@ uint32_t ZMacEventLoop(uint8_t taskId, uint32_t events)
     MAP_macExecute((macEvent_t *) &hdr);
   }
 
+  if (events & MAC_TX_BACKOFF_TIM_TASK_EVT)
+  {
+    hdr.status = MAC_SUCCESS;
+    hdr.event = TX_BACKOFF_TIM_EXP_EVT;
+    macExecute((macEvent_t *) &hdr);
+  }
+
+  if (events & MAC_RX_BACKOFF_TIM_TASK_EVT)
+  {
+    hdr.status = MAC_SUCCESS;
+    hdr.event =  RX_BACKOFF_TIM_EXP_EVT;
+    macExecute((macEvent_t *) &hdr);
+  }
+
   /* handle pending message, if any */
   if (macMain.pPending != NULL)
   {
@@ -468,11 +478,6 @@ uint32_t ZMacEventLoop(uint8_t taskId, uint32_t events)
 uint8_t ZMacInit( void )
 {
   uint8_t i;
-
-#if defined( ZCL_KEY_ESTABLISH )
-  /* Set the callback function for 16 byte random seed */
-  MAC_SetRandomSeedCB( SSP_StoreRandomSeedNV);
-#endif
 
   MAP_MAC_Init();
 
@@ -568,10 +573,14 @@ uint8_t ZMacSetReq( uint8_t attr, byte *value )
   {
     osal_cpyExtAddr( aExtendedAddress, value );
   }
-  if((attr == ZMacRxOnIdle) && (*value == FALSE) && (zgAllowRadioRxOff == FALSE))
+  if(attr == ZMacRxOnIdle)
   {
-    return ZFailure;
+    if ((*value == FALSE) && (zgAllowRadioRxOff == FALSE))
+    {
+      return ZFailure;
+    }
   }
+
   return (ZMacStatus_t) MAP_MAC_MlmeSetReq( attr, value );
 }
 

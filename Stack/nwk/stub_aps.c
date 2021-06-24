@@ -650,7 +650,8 @@ uint8_t StubAPS_ZMacCallback( uint8_t *msgPtr )
   }
   else if ( event == MAC_MCPS_DATA_CNF )
   {
-    buf = ((macMcpsDataCnf_t *)msgPtr)->pDataReq->msdu.p;
+    // Adjust the msdu buffer in dataCnf from MAC header to MAC payload
+    buf = (uint8_t *)((macMcpsDataCnf_t *)msgPtr)->pDataReq + sizeof(macMcpsDataReq_t) + MAC_DATA_OFFSET;
   }
 
   if ( buf )
@@ -804,7 +805,8 @@ uint8_t INTERP_DataReqMTU( void )
            APS_CLUSTERID_FIELD_LEN  +
            APS_PROFILEID_FIELD_LEN;
 
-  mtu = MAC_A_MAX_FRAME_SIZE - STUB_NWK_HDR_LEN - hdrLen;
+  mtu = (macCfg.macMaxFrameSize - MAC_A_MAX_FRAME_OVERHEAD) -
+        STUB_NWK_HDR_LEN - hdrLen;
 
   return ( mtu );
 

@@ -9,7 +9,7 @@
 
  ******************************************************************************
  
- Copyright (c) 2006-2019, Texas Instruments Incorporated
+ Copyright (c) 2006-2021, Texas Instruments Incorporated
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -62,10 +62,11 @@ typedef unsigned short  uint16;
 typedef signed   long   int32;
 typedef unsigned long   uint32;
 
-//typedef unsigned char   bool;
-
 typedef uint32          halDataAlign_t;
+
+#ifndef __cplusplus
 #define bool            _Bool
+#endif
 
 /* ------------------------------------------------------------------------------------------------
  *                                        Compiler Macros
@@ -74,6 +75,9 @@ typedef uint32          halDataAlign_t;
 /* ----------- IAR Compiler ----------- */
 #ifdef __IAR_SYSTEMS_ICC__
 #define ASM_NOP    asm("NOP")
+#ifdef USE_DMM
+#define NO_INIT    __no_init
+#endif
 
 /* ----------- KEIL Compiler ----------- */
 #elif defined __KEIL__
@@ -82,9 +86,12 @@ typedef uint32          halDataAlign_t;
 /* ----------- CCS Compiler ----------- */
 #elif defined __TI_COMPILER_VERSION || defined __TI_COMPILER_VERSION__
 #define ASM_NOP    asm(" NOP")
+#ifdef USE_DMM
+#define NO_INIT    __attribute__((noinit))
+#endif
 
-/* ----------- GNU Compiler ----------- */
-#elif defined __GNUC__
+/* ----------- GNU & TI-CLANG Compiler ----------- */
+#elif defined(__GNUC__) || defined(__clang__)
 #define ASM_NOP __asm__ __volatile__ ("nop")
 
 /* ---------- MSVC compiler ---------- */
@@ -128,8 +135,12 @@ typedef uint32          halDataAlign_t;
 #define PACKED_TYPEDEF_STRUCT       PACKED typedef struct
 #define PACKED_TYPEDEF_CONST_STRUCT PACKED typedef const struct
 #define PACKED_TYPEDEF_UNION        PACKED typedef union
+#ifdef USE_DMM
+#define PACKED_ALIGNED                  PACKED
+#define PACKED_ALIGNED_TYPEDEF_STRUCT   PACKED_TYPEDEF_STRUCT
+#endif
 
-#elif defined __TI_COMPILER_VERSION || defined __TI_COMPILER_VERSION__
+#elif defined __TI_COMPILER_VERSION || defined __TI_COMPILER_VERSION__ || defined __clang__
 #define XDATA
 #define CODE
 #define DATA
@@ -139,9 +150,24 @@ typedef uint32          halDataAlign_t;
 #define PACKED_TYPEDEF_STRUCT       typedef struct PACKED
 #define PACKED_TYPEDEF_CONST_STRUCT typedef const struct PACKED
 #define PACKED_TYPEDEF_UNION        typedef union PACKED
+#ifdef USE_DMM
+#define PACKED_ALIGNED                      __attribute__((packed,aligned(4)))
+#define PACKED_ALIGNED_TYPEDEF_STRUCT       typedef struct PACKED_ALIGNED
+#endif
 
 #elif defined (__GNUC__)
-#define PACKED __attribute__((__packed__))
+#define XDATA
+#define CODE
+#define DATA
+#define PACKED                      __attribute__((__packed__))
+#define PACKED_TYPEDEF_STRUCT       typedef struct PACKED
+#define PACKED_STRUCT                       struct PACKED
+#define PACKED_TYPEDEF_CONST_STRUCT         typedef const struct PACKED
+#define PACKED_TYPEDEF_UNION                typedef union PACKED
+#ifdef USE_DMM
+#define PACKED_ALIGNED                      __attribute__((packed,aligned(4)))
+#define PACKED_ALIGNED_TYPEDEF_STRUCT       typedef struct PACKED_ALIGNED
+#endif
 #endif
 
 /**************************************************************************************************

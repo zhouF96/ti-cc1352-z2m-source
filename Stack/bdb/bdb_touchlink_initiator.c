@@ -42,6 +42,7 @@
  * INCLUDES
  */
 #include "zcomdef.h"
+#include "ti_zstack_config.h"
 #include "rom_jt_154.h"
 #include "osal_nv.h"
 #include "af.h"
@@ -191,7 +192,6 @@ static ZStatus_t initiatorSendNwkUpdateReq( bdbTLScanRsp_t *pRsp );
 ZStatus_t touchLinkInitiator_StartDevDisc( void )
 {
   OsalPort_clearEvent( ZDAppTaskID, ZDO_NETWORK_INIT ); // in case orphaned rejoin was called
-  ZDApp_StopJoiningCycle();
 
   //abort any touchlink in progress and start the new dev discovery.
   touchLinkInitiator_AbortTL();
@@ -284,7 +284,7 @@ ZStatus_t touchLinkInitiator_AbortTL( void )
     if( savedTXPower != 0 )
     {
       // restore previous TX power prior to scan requests
-      ZMacSetTransmitPower(savedTXPower);
+      ZMacSetTransmitPower( (ZMacTransmitPower_t) savedTXPower);
     }
 
     return ( ZSuccess );
@@ -451,7 +451,7 @@ uint32_t touchLinkInitiator_event_loop( uint8_t task_id, uint32_t events )
     }
     else // Channels scan is complete
     {
-      if((scanReqChannels == TOUCHLINK_SCAN_PRIMARY_CHANNELS) && (bdbAttributes.bdbNodeIsOnANetwork == FALSE))
+      if(scanReqChannels == TOUCHLINK_SCAN_PRIMARY_CHANNELS)
       {
         // Extended scan is required, lets scan secondary channels
         scanReqChannels = TOUCHLINK_SCAN_SECONDARY_CHANNELS;
@@ -464,7 +464,7 @@ uint32_t touchLinkInitiator_event_loop( uint8_t task_id, uint32_t events )
               (selectedTarget.scanRsp.deviceInfo.endpoint != DEV_INFO_INVALID_EP))
       {
         // restore previous TX power prior to scan requests
-        ZMacSetTransmitPower(savedTXPower);
+        ZMacSetTransmitPower( (ZMacTransmitPower_t) savedTXPower);
 
         // Make sure the responder is not a factory new initiator if this device is also
         // factory new
@@ -506,7 +506,7 @@ uint32_t touchLinkInitiator_event_loop( uint8_t task_id, uint32_t events )
       else
       {
         // restore previous TX power prior to scan requests
-        ZMacSetTransmitPower(savedTXPower);
+        ZMacSetTransmitPower( (ZMacTransmitPower_t) savedTXPower);
 
         // We did not manage to select any target
         // Let's just go back to our initial configuration
@@ -837,8 +837,6 @@ uint32_t touchLinkInitiator_event_loop( uint8_t task_id, uint32_t events )
 
   if(events & TOUCHLINK_W4_REJOIN_EVT)
   {
-    // Stop joining cycle
-    ZDApp_StopJoiningCycle();
 
     // return unprocessed events
     return(events ^ TOUCHLINK_W4_REJOIN_EVT);
@@ -1803,7 +1801,7 @@ static void initiatorSendScanReq( bool freshScan )
     if( freshScan )
     {
       // read + save current TX power
-      ZMacGetReq(ZMacPhyTransmitPowerSigned, &savedTXPower);
+      ZMacGetReq(ZMacPhyTransmitPowerSigned, (byte *) &savedTXPower);
 
       // set TX power to 0 per BDB v1.0 sec 8.7 (3)
       // TX power is restored after scan rsp is received

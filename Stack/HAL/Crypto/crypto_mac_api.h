@@ -9,7 +9,7 @@
 
  ******************************************************************************
  
- Copyright (c) 2015-2019, Texas Instruments Incorporated
+ Copyright (c) 2015-2021, Texas Instruments Incorporated
  All rights reserved.
 
  Redistribution and use in source and binary forms, with or without
@@ -55,7 +55,7 @@ extern "C"
 /*******************************************************************************
  * INCLUDES
  */
-#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2)
+#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2) && !defined(DeviceFamily_CC13X2X7) && !defined(DeviceFamily_CC26X2X7) && !defined(DeviceFamily_CC13X1) && !defined(DeviceFamily_CC26X1)
 #include <ti/drivers/crypto/CryptoCC26XX.h>
 #else
 #include <ti/drivers/AESCCM.h>
@@ -74,7 +74,7 @@ extern uint32_t *macCryptoDrvTblPtr;
  * CONSTANTS
  */
 
-#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2)
+#if !defined(DeviceFamily_CC13X2) && !defined(DeviceFamily_CC26X2) && !defined(DeviceFamily_CC13X2X7) && !defined(DeviceFamily_CC26X2X7) && !defined(DeviceFamily_CC13X1) && !defined(DeviceFamily_CC26X1)
 // Crypto proxy index for crypto driver API
 #define CRYPTOCC26XX_CLOSE              0
 #define CRYPTOCC26XX_INIT               1

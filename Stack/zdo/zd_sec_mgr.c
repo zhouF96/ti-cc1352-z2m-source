@@ -1118,11 +1118,59 @@ ZStatus_t ZDSecMgrDeviceJoin( ZDSecMgrDevice_t* device )
     // Send the nwk key if joining/rejoining has no nwk security
     if ( device->secure == FALSE )
     {
-        //These methods will use their respective APS key to validate sending nwk key.
-        if((device->devStatus & DEV_SEC_INIT_STATUS) || (device->devStatus & DEV_SEC_AUTH_TC_REJOIN_STATUS))
+        uint8_t sendNwkKey = FALSE;
+
+        if ( device->devStatus & DEV_SEC_AUTH_TC_REJOIN_STATUS )
+        {
+          // check if we recognize the device performing an unsecure rejoin. If we have
+          // previously authenticated it on the TC, we can consider that it is performing
+          // a trust center rejoin, and we can send it the nwk key using the unique TCLK
+          // that was previously established. If we do not recognize it, it is an unknown
+          // device performing an unsecure rejoin, so we would have to encrypt the nwk key
+          // using the well-known TCLK. zgAllowRejoinsWithWellKnownKey determines if we are allowed to
+          // encrypt the nwk key using the well-known TCLK or not, see zglobals.c definition for
+          // more info. Additionally, if the nwk is open (i.e. NLME_PermitJoining == TRUE), we
+          // should permit devices to unsecure TC rejoin anyways
+          if( (zgAllowRejoinsWithWellKnownKey == FALSE) && (NLME_PermitJoining == FALSE) )
+          {
+            uint8_t found = 0;
+            APSME_TCLinkKeyNVEntry_t TCLKDevEntry = {0};
+            APSME_SearchTCLinkKeyEntry(device->extAddr, &found, &TCLKDevEntry);
+
+            // if we found the device and its key is in the
+            // ZG_VERIFIED_KEY state, that means we have established a
+            // unique TCLK, so we can send it the NWK key using it
+            if( found && (TCLKDevEntry.keyAttributes == ZG_VERIFIED_KEY) )
+            {
+              sendNwkKey = TRUE;
+            }
+          }
+          // zgAllowRejoinsWithWellKnownKey == TRUE
+          else
+          {
+            sendNwkKey = TRUE;
+          }
+        }
+        else if ( device->devStatus & DEV_SEC_INIT_STATUS )
+        {
+          // initial join
+          sendNwkKey = TRUE;
+        }
+
+        if ( sendNwkKey == TRUE )
         {
           //send the nwk key data to the joining device
           status = ZDSecMgrSendNwkKey( device );
+        }
+        else if ( device->devStatus & DEV_SEC_AUTH_STATUS )
+        {
+          // device has already joined and been authenticated so we do not
+          // need to send it the key again
+          status = ZSuccess;
+        }
+        else
+        {
+          status = ZSecFailure;
         }
     }
 
@@ -1690,17 +1738,19 @@ void ZDSecMgrTransportKeyInd( ZDO_TransportKeyInd_t* ind )
     }
     else
     {
-        // Read current TCLK Device entry and update locally
-        osal_nv_read_ex(ZCD_NV_EX_TCLK_TABLE, 0, 0,
-                     sizeof(APSME_TCLinkKeyNVEntry_t),
-                     &TCLKDevEntryCpy);
+        // Find TCLK entry with TC extAddr or first unused entry
+        uint8_t entryFound;
+        entryIndex = APSME_SearchTCLinkKeyEntry(AIB_apsTrustCenterAddress,&entryFound,&TCLKDevEntryCpy);
 
-        OsalPort_memcpy(TCLKDevEntryCpy.extAddr, ind->srcExtAddr, Z_EXTADDR_LEN);
+        if(entryIndex < gZDSECMGR_TC_DEVICE_MAX)
+        {
+          OsalPort_memcpy(TCLKDevEntryCpy.extAddr, ind->srcExtAddr, Z_EXTADDR_LEN);
 
-        //Save the KeyAttribute for joining device
-        osal_nv_write_ex(ZCD_NV_EX_TCLK_TABLE, 0,
-                         sizeof(APSME_TCLinkKeyNVEntry_t),
-                         &TCLKDevEntryCpy);
+          //Save the KeyAttribute for joining device
+          osal_nv_write_ex(ZCD_NV_EX_TCLK_TABLE, entryIndex,
+                          sizeof(APSME_TCLinkKeyNVEntry_t),
+                          &TCLKDevEntryCpy);
+        }
     }
 
 }
@@ -2040,7 +2090,7 @@ void ZDSecMgrGenerateSeed(uint8_t SetDefault)
 /******************************************************************************
  * @fn          ZDSecMgrGenerateKeyFromSeed
  *
- * @brief       Generate the TC link key for an specific device usign seed and ExtAddr
+ * @brief       Generate the TC link key for an specific device using seed and ExtAddr
  *
  * @param       [in]  extAddr
  * @param       [in]  shift    number of byte shifts that the seed will do to
@@ -2054,6 +2104,8 @@ void ZDSecMgrGenerateKeyFromSeed(uint8_t *extAddr, uint8_t shift, uint8_t *key)
 {
   uint8_t i;
   uint8_t tempKey[SEC_KEY_LEN];
+  //shift must be less than SEC_KEY_LEN. This is to handle the cases where SeedShift_IcIndex is >= SEC_KEY_LEN.
+  shift &= 0x0F;
 
   if((key != NULL) && (extAddr != NULL))
   {
